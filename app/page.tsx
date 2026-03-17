@@ -1,0 +1,35 @@
+﻿import type { Metadata } from "next";
+import { HomeHero } from "@/components/home/home-hero";
+import { CoreCapabilities } from "@/components/home/core-capabilities";
+import { ApplicableScenarios } from "@/components/home/applicable-scenarios";
+import { RiskNotice } from "@/components/home/risk-notice";
+import { HomeCta } from "@/components/home/home-cta";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+export const metadata: Metadata = {
+  title: "查规范·查依据·问规则",
+  description: "工程造价规范检索与问答引流站：查规范、查依据、问规则、试用。",
+  keywords: ["工程造价", "规范检索", "计价依据", "造价问答", "试用"],
+  alternates: {
+    canonical: "/"
+  },
+  openGraph: {
+    title: "查规范、查依据、问规则 | 工程造价规范检索助手",
+    description: "面向造价师和造价咨询团队的轻量检索与问答工具。",
+    type: "website",
+    url: `${siteUrl}/`
+  }
+};
+
+export default function HomePage() {
+  return (
+    <div className="space-y-7 md:space-y-10">
+      <HomeHero />
+      <CoreCapabilities />
+      <ApplicableScenarios />
+      <RiskNotice />
+      <HomeCta />
+    </div>
+  );
+}

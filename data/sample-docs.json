@@ -1,0 +1,195 @@
+﻿{
+  "documents": [
+    {
+      "title": "建设工程工程量清单计价规范",
+      "code": "GB 50500-2013",
+      "category": "国家标准",
+      "source": "住房和城乡建设部",
+      "version": "2013",
+      "publishDate": "2013-12-25",
+      "status": "ACTIVE",
+      "chunks": [
+        {
+          "chapterTitle": "第3章 工程量清单编制",
+          "sectionTitle": "3.1 一般规定",
+          "chunkText": "工程量清单应依据统一工程量计算规则编制，项目特征描述应完整、准确，并应满足计价和合同管理需要。",
+          "pageNumber": 18,
+          "keywords": ["工程量清单", "项目特征", "计价"],
+          "sortOrder": 1
+        },
+        {
+          "chapterTitle": "第5章 招标控制价",
+          "sectionTitle": "5.2 编制依据",
+          "chunkText": "招标控制价应结合工程量清单、计价定额、市场价格信息及有关费用标准进行编制，并保持依据可追溯。",
+          "pageNumber": 42,
+          "keywords": ["招标控制价", "计价定额", "市场价格"],
+          "sortOrder": 2
+        },
+        {
+          "chapterTitle": "第9章 合同价款调整",
+          "sectionTitle": "9.3 工程变更",
+          "chunkText": "因工程变更引起工程量增减的，应按合同约定的计价原则调整合同价款；合同未约定的，可参照类似项目综合单价确定。",
+          "pageNumber": 74,
+          "keywords": ["工程变更", "合同价款调整", "综合单价"],
+          "sortOrder": 3
+        },
+        {
+          "chapterTitle": "第10章 工程结算",
+          "sectionTitle": "10.1 一般规定",
+          "chunkText": "工程结算应以合同约定、经确认的工程量及相关签证资料为依据，确保结算资料完整和逻辑一致。",
+          "pageNumber": 82,
+          "keywords": ["工程结算", "签证资料", "合同约定"],
+          "sortOrder": 4
+        }
+      ]
+    },
+    {
+      "title": "房屋建筑与装饰工程工程量计算规范",
+      "code": "GB 50854-2013",
+      "category": "工程量计算规范",
+      "source": "住房和城乡建设部",
+      "version": "2013",
+      "publishDate": "2012-12-25",
+      "status": "ACTIVE",
+      "chunks": [
+        {
+          "chapterTitle": "附录A 土石方工程",
+          "sectionTitle": "A.1 土方工程",
+          "chunkText": "挖土方工程量按设计图示尺寸以体积计算，单位为立方米；放坡和工作面应按规定计算。",
+          "pageNumber": 102,
+          "keywords": ["土方", "工程量计算", "立方米"],
+          "sortOrder": 1
+        },
+        {
+          "chapterTitle": "附录C 桩基工程",
+          "sectionTitle": "C.2 灌注桩",
+          "chunkText": "灌注桩工程量按设计桩长乘以桩截面积计算，桩头处理及成孔方式应在项目特征中明确。",
+          "pageNumber": 136,
+          "keywords": ["灌注桩", "桩基", "项目特征"],
+          "sortOrder": 2
+        },
+        {
+          "chapterTitle": "附录M 装饰工程",
+          "sectionTitle": "M.3 墙面装饰",
+          "chunkText": "墙面块料面层按设计图示面积计算，扣除门窗洞口并计入必要损耗，计量单位为平方米。",
+          "pageNumber": 224,
+          "keywords": ["装饰工程", "墙面", "平方米"],
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "title": "通用安装工程工程量计算规范",
+      "code": "GB 50856-2013",
+      "category": "工程量计算规范",
+      "source": "住房和城乡建设部",
+      "version": "2013",
+      "publishDate": "2012-12-25",
+      "status": "ACTIVE",
+      "chunks": [
+        {
+          "chapterTitle": "第6章 给排水、采暖、燃气工程",
+          "sectionTitle": "6.2 管道安装",
+          "chunkText": "管道安装工程量通常按设计图示中心线长度计算，管件、阀门及支吊架应按清单项目特征分别描述。",
+          "pageNumber": 89,
+          "keywords": ["安装工程", "管道安装", "清单项目特征"],
+          "sortOrder": 1
+        },
+        {
+          "chapterTitle": "第7章 电气设备安装工程",
+          "sectionTitle": "7.4 配电箱",
+          "chunkText": "配电箱安装可按台计量，箱体规格、安装方式和回路配置应在清单特征中体现。",
+          "pageNumber": 113,
+          "keywords": ["电气安装", "配电箱", "按台计量"],
+          "sortOrder": 2
+        },
+        {
+          "chapterTitle": "第11章 刷油、防腐蚀、绝热工程",
+          "sectionTitle": "11.1 一般规定",
+          "chunkText": "防腐及绝热工程量计算应结合设计厚度、材料种类及施工部位，计量口径应与计价依据保持一致。",
+          "pageNumber": 178,
+          "keywords": ["防腐", "绝热", "计价依据"],
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "title": "建筑安装工程费用项目组成",
+      "code": "建标[2013]44号",
+      "category": "计价依据",
+      "source": "住房和城乡建设部 财政部",
+      "version": "2013",
+      "publishDate": "2013-03-01",
+      "status": "ACTIVE",
+      "chunks": [
+        {
+          "chapterTitle": "第一部分 费用构成",
+          "sectionTitle": "一、直接费",
+          "chunkText": "直接费包括人工费、材料费、施工机具使用费等，是形成工程实体和完成施工所发生的直接支出。",
+          "pageNumber": 6,
+          "keywords": ["费用项目组成", "直接费", "人工费"],
+          "sortOrder": 1
+        },
+        {
+          "chapterTitle": "第一部分 费用构成",
+          "sectionTitle": "二、企业管理费",
+          "chunkText": "企业管理费应根据企业组织施工生产和经营管理活动所需费用综合测定，通常以规定基数乘费率计取。",
+          "pageNumber": 9,
+          "keywords": ["企业管理费", "费率", "计取"],
+          "sortOrder": 2
+        },
+        {
+          "chapterTitle": "第二部分 规费与税金",
+          "sectionTitle": "三、税金",
+          "chunkText": "税金应按照国家现行税收政策和计税规则计算，计价文件中应明确税率及计税基数口径。",
+          "pageNumber": 14,
+          "keywords": ["规费", "税金", "计税基数"],
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "title": "建设工程施工合同（示范文本）计价与结算条款摘录",
+      "code": "GF-2017-0201",
+      "category": "合同与结算依据",
+      "source": "住房和城乡建设部 国家市场监督管理总局",
+      "version": "2017",
+      "publishDate": "2017-10-01",
+      "status": "ACTIVE",
+      "chunks": [
+        {
+          "chapterTitle": "通用合同条款",
+          "sectionTitle": "14.1 合同价格形式",
+          "chunkText": "合同价款可采用总价合同、单价合同或成本加酬金合同；具体价格调整机制应以专用合同条款约定为准。",
+          "pageNumber": 52,
+          "keywords": ["合同价款", "单价合同", "总价合同"],
+          "sortOrder": 1
+        },
+        {
+          "chapterTitle": "通用合同条款",
+          "sectionTitle": "14.2 预付款与进度款",
+          "chunkText": "发包人应按合同约定支付预付款和进度款，承包人应按已完工程量和约定计价方法报送支付申请。",
+          "pageNumber": 54,
+          "keywords": ["进度款", "已完工程量", "支付申请"],
+          "sortOrder": 2
+        },
+        {
+          "chapterTitle": "通用合同条款",
+          "sectionTitle": "15.3 变更估价",
+          "chunkText": "工程变更的估价应优先适用合同中已有综合单价；无适用单价时可按合理成本加约定利润确定，并履行确认程序。",
+          "pageNumber": 61,
+          "keywords": ["变更估价", "综合单价", "签证"],
+          "sortOrder": 3
+        },
+        {
+          "chapterTitle": "通用合同条款",
+          "sectionTitle": "17.1 竣工结算",
+          "chunkText": "竣工结算应基于合同约定、设计变更、现场签证及已完工程量资料进行审核，争议部分可按约定程序处理。",
+          "pageNumber": 72,
+          "keywords": ["竣工结算", "现场签证", "结算审核"],
+          "sortOrder": 4
+        }
+      ]
+    }
+  ]
+}

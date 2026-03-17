@@ -1,0 +1,41 @@
+{
+  "name": "engineering-cost-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup:local": "npm run prisma:dbpush && npm run import:docs -- data/sample-docs.json && npm run seed:admin-config",
+    "import:docs": "tsx scripts/import-docs.ts",
+    "seed:admin-config": "tsx scripts/seed-admin-config.ts",
+    "prisma:generate": "tsx scripts/prisma-run.ts generate",
+    "prisma:migrate": "tsx scripts/prisma-run.ts migrate dev --skip-generate",
+    "prisma:deploy": "tsx scripts/prisma-run.ts migrate deploy",
+    "prisma:dbpush": "tsx scripts/prisma-run.ts db push --skip-generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "next": "^14.2.29",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.28",
+    "@types/react": "^18.3.21",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.29",
+    "postcss": "^8.5.3",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.2"
+  }
+}

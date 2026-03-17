@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Document {
+  id          String         @id @default(cuid())
+  title       String
+  code        String
+  category    String
+  source      String?
+  version     String         @default("v1")
+  publishDate DateTime?
+  status      String         @default("ACTIVE")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  chunks      DocumentChunk[]
+
+  @@unique([code, version])
+  @@index([title])
+  @@index([category])
+  @@index([status])
+  @@index([publishDate])
+}
+
+model DocumentChunk {
+  id           String   @id @default(cuid())
+  documentId   String
+  chapterTitle String?
+  sectionTitle String?
+  chunkText    String
+  pageNumber   Int?
+  keywords     String?
+  sortOrder    Int
+  createdAt    DateTime @default(now())
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, sortOrder])
+  @@index([chapterTitle])
+  @@index([sectionTitle])
+  @@index([pageNumber])
+}
+
+model QARecord {
+  id             String   @id @default(cuid())
+  question       String
+  answer         String
+  sourceChunkIds String?
+  modelName      String?
+  createdAt      DateTime @default(now())
+  ip             String?
+  userAgent      String?
+
+  @@index([createdAt])
+  @@index([modelName])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  companyName String
+  contactName String
+  phone       String
+  wechat      String?
+  email       String?
+  demand      String?
+  sourcePage  String?
+  createdAt   DateTime @default(now())
+  status      String   @default("NEW")
+  note        String?
+
+  @@index([phone])
+  @@index([status])
+  @@index([createdAt])
+  @@index([companyName])
+}
+
+model AdminConfig {
+  id          String   @id @default(cuid())
+  configKey   String   @unique
+  configValue String
+  updatedAt   DateTime @updatedAt
+}
+
+model Feedback {
+  id           String   @id @default(cuid())
+  feedbackType String   @default("GENERAL")
+  sourcePage   String?
+  content      String
+  contact      String?
+  rating       Int?
+  status       String   @default("NEW")
+  note         String?
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([sourcePage])
+  @@index([feedbackType])
+}

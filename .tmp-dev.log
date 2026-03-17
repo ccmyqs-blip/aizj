@@ -1,0 +1,118 @@
+
+> engineering-cost-assistant@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3001
+  - Experiments (use with caution):
+    · typedRoutes
+
+ ✓ Starting...
+ ✓ Ready in 2s
+ ✓ Compiled /api/search in 312ms (59 modules)
+ GET /api/search?q=GB 200 in 505ms
+ ○ Compiling / ...
+ ✓ Compiled / in 3s (560 modules)
+ GET / 200 in 3158ms
+ GET / 200 in 54ms
+ ✓ Compiled /api/qa/ask in 286ms (302 modules)
+[llm] 无上下文证据，直接返回未找到足够依据
+ POST /api/qa/ask 200 in 569ms
+ ✓ Compiled in 219ms (565 modules)
+[llm] 无上下文证据，直接返回未找到足够依据
+ POST /api/qa/ask 200 in 257ms
+[llm] 请求百炼模型: model=qwen-plus, chunks=4
+[llm] generateAnswer 完成, 耗时=5689ms
+ POST /api/qa/ask 200 in 5849ms
+ ✓ Compiled /search in 215ms (562 modules)
+ GET /search?q=GB%2050500 200 in 320ms
+[llm] 请求百炼模型: model=qwen-plus, chunks=4
+[llm] generateAnswer 完成, 耗时=5560ms
+ POST /api/qa/ask 200 in 5734ms
+ ✓ Compiled /api/leads in 70ms (302 modules)
+ POST /api/leads 400 in 87ms
+ POST /api/leads 400 in 5ms
+ POST /api/leads 200 in 210ms
+ ✓ Compiled /admin in 414ms (561 modules)
+ GET /admin 307 in 562ms
+ GET /admin 307 in 91ms
+ ✓ Compiled /api/admin/login in 62ms (307 modules)
+ POST /api/admin/login 200 in 101ms
+ GET /admin 200 in 79ms
+ ✓ Compiled /api/qa/ask in 50ms (309 modules)
+[llm] 请求百炼模型: model=qwen-plus, chunks=3
+[llm] generateAnswer 完成, 耗时=6076ms
+ POST /api/qa/ask 200 in 6302ms
+ POST /api/admin/login 200 in 7ms
+ GET /admin 200 in 91ms
+ ✓ Compiled in 157ms (270 modules)
+ ✓ Compiled in 105ms (270 modules)
+ ✓ Compiled in 89ms (270 modules)
+ ✓ Compiled / in 227ms (255 modules)
+ ⨯ TypeError: __webpack_modules__[moduleId] is not a function
+    at Object.__webpack_require__ [as require] (F:\Agent\07\.next\server\webpack-runtime.js:33:42)
+    at JSON.parse (<anonymous>)
+digest: "2721588331"
+TypeError: __webpack_modules__[moduleId] is not a function
+    at Object.__webpack_require__ [as require] (F:\Agent\07\.next\server\webpack-runtime.js:33:42)
+    at require (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:20064)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108376
+    at ea (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108583)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:109078)
+    at eo (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108123)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115291
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115308
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115341
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115358
+    at t (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115581)
+ ⨯ TypeError: __webpack_modules__[moduleId] is not a function
+    at Object.__webpack_require__ [as require] (F:\Agent\07\.next\server\webpack-runtime.js:33:42)
+    at require (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:20064)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108376
+    at ea (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108583)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:109078)
+    at eo (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108123)
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115291
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115308
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115341
+    at F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115358
+    at t (F:\Agent\07\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115581) {
+  page: '/'
+}
+ ○ Compiling /_error ...
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'F:\System Volume Information'
+ ✓ Compiled /_error in 934ms (738 modules)
+ GET / 500 in 1432ms
+Watchpack Error (initial scan): Error: EINVAL: invalid argument, lstat 'F:\System Volume Information'
+ ✓ Compiled /api/search in 75ms (329 modules)
+ GET /api/search?q=GB%2050500 200 in 144ms
+ ✓ Compiled /api/qa/ask in 128ms (343 modules)
+[llm] 请求百炼模型: model=qwen-plus, chunks=4
+[llm] generateAnswer 完成, 耗时=6231ms
+ POST /api/qa/ask 200 in 6544ms
+ ✓ Compiled /api/leads in 96ms (346 modules)
+ POST /api/leads 200 in 264ms
+ ✓ Compiled /admin in 99ms (364 modules)
+ GET /admin 307 in 273ms
+ ✓ Compiled /api/admin/login in 60ms (366 modules)
+ POST /api/admin/login 200 in 84ms
+ GET /admin 200 in 69ms
+ GET / 200 in 46ms
+ GET / 200 in 20ms
+ GET /api/search?q=GB%2050500 200 in 9ms
+[llm] 请求百炼模型: model=qwen-plus, chunks=4
+[llm] generateAnswer 完成, 耗时=7162ms
+ POST /api/qa/ask 200 in 7343ms
+ POST /api/leads 200 in 173ms
+ GET /admin 307 in 87ms
+ POST /api/admin/login 200 in 5ms
+ GET /admin 200 in 78ms
+ ✓ Compiled in 161ms (808 modules)
+[?25h
