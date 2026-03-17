@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-const highlights = ["条款定位", "依据引用", "企业试用转化"];
+const highlights = ["条款定位", "依据引用", "规则问答"];
 
 export function HomeHero() {
   const router = useRouter();
@@ -21,9 +20,7 @@ export function HomeHero() {
       <div className="grid gap-6 md:grid-cols-[1.5fr_1fr] md:items-end">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-brand-700">ENGINEERING COST INTELLIGENCE</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-brand-900 md:text-4xl">
-            查规范 · 查依据 · 问规则 · 申请试用
-          </h1>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-brand-900 md:text-4xl">查规范 · 查依据 · 问规则</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
             面向造价师、预算员、造价咨询团队。优先保证“可查、可引、可用”，快速定位规范条款并输出可复核依据。
           </p>
@@ -35,20 +32,10 @@ export function HomeHero() {
               placeholder="输入规范名称、编号或关键词，例如：GB 50500、工程变更、结算审核"
               className="field-input flex-1"
             />
-            <button type="submit" className="btn-primary h-11 md:px-6">
-              进入规范检索
+            <button type="submit" className="btn-secondary h-11 md:px-6">
+              搜索规范
             </button>
           </form>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-            <Link href="/qa" className="text-brand-700 transition hover:text-brand-900">
-              去问规则
-            </Link>
-            <span className="text-slate-300">|</span>
-            <Link href="/trial" className="text-brand-700 transition hover:text-brand-900">
-              申请试用
-            </Link>
-          </div>
         </div>
 
         <aside className="rounded-2xl border border-brand-100 bg-white/95 p-5">

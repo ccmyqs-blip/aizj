@@ -14,29 +14,33 @@ export function AdminLoginForm() {
     setErrorMessage("");
     setLoading(true);
 
-    const response = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ password })
-    });
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password })
+      });
 
-    if (!response.ok) {
-      const data = (await response.json()) as { message?: string };
-      setErrorMessage(data.message ?? "登录失败");
+      if (!response.ok) {
+        setErrorMessage("登录失败，请重试。");
+        setLoading(false);
+        return;
+      }
+
+      router.replace("/admin");
+      router.refresh();
+    } catch {
+      setErrorMessage("登录失败，请重试。");
       setLoading(false);
-      return;
     }
-
-    router.replace("/admin");
-    router.refresh();
   };
 
   return (
     <form onSubmit={handleSubmit} className="panel mx-auto max-w-md space-y-4 p-6">
       <h1 className="text-lg font-semibold text-brand-900">后台登录</h1>
-      <p className="text-sm text-slate-500">请输入管理员密码进入后台管理页面。</p>
+      <p className="text-sm text-slate-500">请输入管理员密码。</p>
       <label className="block text-sm text-slate-700">
         管理员密码
         <input

@@ -1,13 +1,16 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { LEAD_STATUSES, type LeadStatusValue } from "@/lib/constants/status";
+import { FEEDBACK_STATUSES, LEAD_STATUSES, type FeedbackStatusValue, type LeadStatusValue } from "@/lib/constants/status";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/request-ip";
+import { logSecurityEvent } from "@/lib/security-log";
 
 export const metadata: Metadata = {
   title: "后台管理",
-  description: "留资、问答日志与规范数据统计管理。"
+  description: "留资、反馈、问答日志与规范数据统计管理。"
 };
 
 function parseSourceChunkCount(sourceChunkIds: string | null) {
@@ -30,12 +33,38 @@ function normalizeLeadStatus(status: string): LeadStatusValue {
   return "NEW";
 }
 
+function normalizeFeedbackStatus(status: string): FeedbackStatusValue {
+  if ((FEEDBACK_STATUSES as readonly string[]).includes(status)) {
+    return status as FeedbackStatusValue;
+  }
+  return "NEW";
+}
+
+function estimateTextTokens(text: string) {
+  const cjkCount = (text.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  const asciiWordCount = (text.match(/[A-Za-z0-9_]+/g) ?? []).length;
+  const otherCount = Math.max(0, text.length - cjkCount);
+  return Math.max(1, Math.round(cjkCount + asciiWordCount * 1.3 + otherCount * 0.3));
+}
+
 export default async function AdminPage() {
   if (!isAdminAuthenticated()) {
+    const requestHeaders = headers();
+    const ip = getClientIp({ headers: requestHeaders });
+    const userAgent = requestHeaders.get("user-agent") ?? "";
+
+    logSecurityEvent({
+      eventType: "ADMIN_ACCESS_BLOCKED",
+      ip,
+      userAgent,
+      path: "/admin",
+      detail: "unauthenticated access"
+    });
+
     redirect("/admin/login");
   }
 
-  const [leads, qaRecords, documentCount, chunkCount] = await prisma.$transaction([
+  const [leads, qaRecords, feedbacks, uploadedDocuments, documentCount, chunkCount] = await prisma.$transaction([
     prisma.lead.findMany({
       orderBy: {
         createdAt: "desc"
@@ -67,6 +96,44 @@ export default async function AdminPage() {
         createdAt: true
       }
     }),
+    prisma.feedback.findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 80,
+      select: {
+        id: true,
+        feedbackType: true,
+        sourcePage: true,
+        content: true,
+        contact: true,
+        rating: true,
+        status: true,
+        note: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    }),
+    prisma.document.findMany({
+      where: {
+        source: {
+          startsWith: "/uploads/documents/"
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 20,
+      select: {
+        id: true,
+        title: true,
+        code: true,
+        category: true,
+        source: true,
+        status: true,
+        createdAt: true
+      }
+    }),
     prisma.document.count(),
     prisma.documentChunk.count()
   ]);
@@ -92,12 +159,53 @@ export default async function AdminPage() {
     sourceChunkCount: parseSourceChunkCount(item.sourceChunkIds)
   }));
 
+  const qaModelStatsMap = new Map<string, { modelName: string; callCount: number; approxTokens: number }>();
+  for (const record of serializedQaRecords) {
+    const modelName = record.modelName || "unknown";
+    const estimated = estimateTextTokens(record.question) + estimateTextTokens(record.answer);
+    const prev = qaModelStatsMap.get(modelName);
+    if (prev) {
+      prev.callCount += 1;
+      prev.approxTokens += estimated;
+    } else {
+      qaModelStatsMap.set(modelName, {
+        modelName,
+        callCount: 1,
+        approxTokens: estimated
+      });
+    }
+  }
+  const qaModelStats = Array.from(qaModelStatsMap.values()).sort((a, b) => b.callCount - a.callCount);
+
+  const serializedFeedbacks = feedbacks.map((item) => ({
+    id: item.id,
+    feedbackType: item.feedbackType,
+    sourcePage: item.sourcePage,
+    content: item.content,
+    contact: item.contact,
+    rating: item.rating,
+    status: normalizeFeedbackStatus(item.status),
+    note: item.note,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString()
+  }));
+
+  const serializedUploadedDocuments = uploadedDocuments.map((item) => ({
+    id: item.id,
+    title: item.title,
+    code: item.code,
+    category: item.category,
+    source: item.source,
+    status: item.status,
+    createdAt: item.createdAt.toISOString()
+  }));
+
   return (
     <div className="space-y-6">
       <section className="panel flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <h1 className="section-title">后台管理</h1>
-          <p className="section-subtitle">轻量管理控制台：留资、问答日志、文档统计</p>
+          <p className="section-subtitle">轻量管理控制台：留资、反馈、问答日志、文档统计</p>
         </div>
         <form action="/api/admin/logout" method="post">
           <button
@@ -109,7 +217,7 @@ export default async function AdminPage() {
         </form>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <article className="panel p-4">
           <p className="text-xs text-slate-500">规范文档数</p>
           <p className="mt-2 text-2xl font-semibold text-brand-900">{documentCount}</p>
@@ -122,9 +230,19 @@ export default async function AdminPage() {
           <p className="text-xs text-slate-500">留资线索数</p>
           <p className="mt-2 text-2xl font-semibold text-brand-900">{serializedLeads.length}</p>
         </article>
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">反馈留言数</p>
+          <p className="mt-2 text-2xl font-semibold text-brand-900">{serializedFeedbacks.length}</p>
+        </article>
       </section>
 
-      <AdminDashboard leads={serializedLeads} qaRecords={serializedQaRecords} />
+      <AdminDashboard
+        leads={serializedLeads}
+        qaRecords={serializedQaRecords}
+        feedbacks={serializedFeedbacks}
+        qaModelStats={qaModelStats}
+        uploadedDocuments={serializedUploadedDocuments}
+      />
     </div>
   );
 }

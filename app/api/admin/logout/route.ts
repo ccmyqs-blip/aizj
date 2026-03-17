@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { ADMIN_COOKIE_NAME } from "@/lib/auth";
+import { buildClearAdminSessionCookie, isAdminAuthenticated } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  if (!isAdminAuthenticated()) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
   const response = NextResponse.redirect(new URL("/admin/login", request.url));
-  response.cookies.set({
-    name: ADMIN_COOKIE_NAME,
-    value: "",
-    maxAge: 0,
-    path: "/"
-  });
+  response.cookies.set(buildClearAdminSessionCookie());
   return response;
 }

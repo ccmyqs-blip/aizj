@@ -1,6 +1,5 @@
-"use client";
+﻿"use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { normalizeKeywords } from "@/lib/search-utils";
@@ -89,13 +88,6 @@ export function SearchPageClient() {
       <section className="space-y-2">
         <h1 className="section-title">查规范 / 查依据</h1>
         <p className="section-subtitle">支持按规范名称、编号、条文内容检索，并展示章节与页码定位。</p>
-      </section>
-
-      <section className="panel flex flex-col gap-3 bg-gradient-to-r from-white to-brand-50 p-4 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-slate-700">企业需要项目资料专项分析或本地部署评估，可直接提交试用申请。</p>
-        <Link href="/trial" className="btn-primary">
-          申请试用
-        </Link>
       </section>
 
       <SearchBox

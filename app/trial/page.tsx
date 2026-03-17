@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { LeadForm } from "@/components/leads/lead-form";
 
 export const metadata: Metadata = {
@@ -7,6 +7,8 @@ export const metadata: Metadata = {
 };
 
 export default function TrialPage() {
+  const captchaEnabled = process.env.NEXT_PUBLIC_CAPTCHA_ENABLED === "true";
+
   return (
     <div className="space-y-6">
       <section className="panel bg-gradient-to-r from-white to-brand-50 p-6">
@@ -15,7 +17,7 @@ export default function TrialPage() {
           面向造价咨询公司与企业成本管理团队，支持内部试用、项目资料专项分析、本地部署咨询。
         </p>
       </section>
-      <LeadForm />
+      <LeadForm captchaEnabled={captchaEnabled} />
     </div>
   );
 }

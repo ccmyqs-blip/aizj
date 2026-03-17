@@ -38,6 +38,7 @@ model DocumentChunk {
   sortOrder    Int
   createdAt    DateTime @default(now())
   document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embeddings   DocumentChunkEmbedding[]
 
   @@index([documentId, sortOrder])
   @@index([chapterTitle])
@@ -45,8 +46,24 @@ model DocumentChunk {
   @@index([pageNumber])
 }
 
+model DocumentChunkEmbedding {
+  id         String        @id @default(cuid())
+  chunkId    String
+  model      String
+  vector     String
+  dimensions Int
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  chunk      DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, model])
+  @@index([model])
+  @@index([chunkId])
+}
+
 model QARecord {
   id             String   @id @default(cuid())
+  userId         String?
   question       String
   answer         String
   sourceChunkIds String?
@@ -54,9 +71,11 @@ model QARecord {
   createdAt      DateTime @default(now())
   ip             String?
   userAgent      String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([modelName])
+  @@index([userId, createdAt])
 }
 
 model Lead {
@@ -103,4 +122,28 @@ model Feedback {
   @@index([status])
   @@index([sourcePage])
   @@index([feedbackType])
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     UserSession[]
+  qaRecords    QARecord[]
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

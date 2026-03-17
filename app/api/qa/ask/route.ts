@@ -4,6 +4,7 @@ import { generateAnswer } from "@/lib/llm";
 import { prisma } from "@/lib/prisma";
 import { getDefaultChunkRetriever } from "@/lib/qa/retriever";
 import type { QACitation } from "@/lib/qa/types";
+import { getAuthenticatedUserFromRequest } from "@/lib/user-auth";
 
 const askSchema = z.object({
   question: z.string().min(4, "问题过短，请补充具体场景").max(300, "问题过长，请精简后再试")
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
     const question = parsed.data.question.trim();
     const userAgent = request.headers.get("user-agent");
     const ip = getClientIp(request);
+    const user = await getAuthenticatedUserFromRequest(request);
 
     const retriever = getDefaultChunkRetriever();
     const retrievedChunks = await retriever.retrieve(question, { topK: 6 });
@@ -53,15 +55,19 @@ export async function POST(request: Request) {
     const citations: QACitation[] = llmResult.citations;
     const modelName = llmResult.modelName;
 
-    await prisma.qARecord
+    const savedRecord = await prisma.qARecord
       .create({
         data: {
+          userId: user?.id ?? null,
           question,
           answer,
           sourceChunkIds: JSON.stringify(citations.map((item) => item.chunkId)),
           modelName,
           ip,
           userAgent
+        },
+        select: {
+          id: true
         }
       })
       .catch(() => null);
@@ -69,7 +75,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       answer,
       citations,
-      modelName
+      modelName,
+      recordId: savedRecord?.id ?? null
     });
   } catch {
     return NextResponse.json({ message: "问答服务暂时不可用" }, { status: 500 });

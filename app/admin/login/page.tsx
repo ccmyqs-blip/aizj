@@ -5,7 +5,7 @@ import { isAdminAuthenticated } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "后台登录",
-  description: "工程造价规范检索助手后台登录页。"
+  description: "管理员登录页面"
 };
 
 export default function AdminLoginPage() {

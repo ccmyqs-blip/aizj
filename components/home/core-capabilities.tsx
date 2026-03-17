@@ -3,6 +3,11 @@ import type { Route } from "next";
 
 const capabilities: Array<{ title: string; desc: string; href: Route }> = [
   {
+    title: "造价AI小助手",
+    desc: "先检索依据再回答，回答附引用，依据不足时明确提示。",
+    href: "/"
+  },
+  {
     title: "查规范",
     desc: "按名称、编号、关键词检索规范与条文，快速定位原文位置。",
     href: "/search"
@@ -11,16 +16,6 @@ const capabilities: Array<{ title: string; desc: string; href: Route }> = [
     title: "查依据",
     desc: "围绕计价依据、费用组成、结算口径进行可追溯查询。",
     href: "/search"
-  },
-  {
-    title: "问规则",
-    desc: "先检索依据再回答，回答附引用，依据不足时明确提示。",
-    href: "/qa"
-  },
-  {
-    title: "试用申请",
-    desc: "支持内部试用申请、项目资料专项分析与本地部署咨询。",
-    href: "/trial"
   }
 ];
 
@@ -30,7 +25,7 @@ export function CoreCapabilities() {
       <h2 className="section-title">核心能力</h2>
       <p className="section-subtitle">以规范检索和依据可追溯为核心，优先保证业务链路完整与可复核。</p>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         {capabilities.map((item) => (
           <article
             key={item.title}

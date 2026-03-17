@@ -15,9 +15,13 @@ type Params = {
   };
 };
 
+function unauthorized() {
+  return NextResponse.json({ message: "未登录或会话失效" }, { status: 401 });
+}
+
 export async function PATCH(request: Request, { params }: Params) {
   if (!isAdminAuthenticated()) {
-    return NextResponse.json({ message: "未登录或会话失效" }, { status: 401 });
+    return unauthorized();
   }
 
   const body = await request.json().catch(() => null);
@@ -57,5 +61,26 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ message: "反馈不存在" }, { status: 404 });
     }
     return NextResponse.json({ message: "更新失败，请稍后重试" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  if (!isAdminAuthenticated()) {
+    return unauthorized();
+  }
+
+  try {
+    await prisma.feedback.delete({
+      where: { id: params.id }
+    });
+
+    return NextResponse.json({
+      message: "删除成功"
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025") {
+      return NextResponse.json({ message: "反馈不存在" }, { status: 404 });
+    }
+    return NextResponse.json({ message: "删除失败，请稍后重试" }, { status: 500 });
   }
 }

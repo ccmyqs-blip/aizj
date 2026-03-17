@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-const scenarios = [
+﻿const scenarios = [
   {
     title: "签证事项核对",
     description: "针对现场签证争议，快速检索对应计价依据和条款口径。"
@@ -35,13 +33,7 @@ export function ApplicableScenarios() {
         ))}
       </div>
 
-      <p className="text-sm text-slate-600">
-        需要结合在手项目做专项分析，可前往
-        <Link href="/trial" className="mx-1 font-semibold text-brand-700 hover:text-brand-900">
-          试用入口
-        </Link>
-        提交需求。
-      </p>
+      <p className="text-sm text-slate-600">如需试用，请使用页面右上角入口提交需求。</p>
     </section>
   );
 }

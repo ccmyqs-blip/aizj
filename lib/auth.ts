@@ -3,31 +3,66 @@ import { cookies } from "next/headers";
 
 export const ADMIN_COOKIE_NAME = "eca_admin_session";
 
-export function getAdminPassword() {
-  const password = process.env.ADMIN_PASSWORD;
-  if (password) {
-    return password;
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("ADMIN_PASSWORD 未配置，生产环境禁止使用默认密码");
-  }
-
-  return "admin123456";
-}
-
-function buildSessionToken(password: string) {
+function hashAdminPassword(password: string) {
   return createHash("sha256").update(`eca:${password}`).digest("hex");
 }
 
-export function createAdminSessionToken() {
-  return buildSessionToken(getAdminPassword());
+export function getAdminPassword() {
+  const password = process.env.ADMIN_PASSWORD?.trim();
+  return password && password.length > 0 ? password : null;
+}
+
+export function getAdminSessionMaxAgeSeconds() {
+  const value = Number(process.env.ADMIN_SESSION_MAX_AGE_SECONDS ?? 60 * 60 * 12);
+  if (!Number.isFinite(value) || value < 60) {
+    return 60 * 60 * 12;
+  }
+  return Math.floor(value);
+}
+
+export function createAdminSessionToken(password: string) {
+  return hashAdminPassword(password);
+}
+
+export function createConfiguredAdminSessionToken() {
+  const password = getAdminPassword();
+  if (!password) {
+    return null;
+  }
+  return createAdminSessionToken(password);
 }
 
 export function isAdminAuthenticated() {
+  const expected = createConfiguredAdminSessionToken();
+  if (!expected) {
+    return false;
+  }
+
   const sessionToken = cookies().get(ADMIN_COOKIE_NAME)?.value;
   if (!sessionToken) {
     return false;
   }
-  return sessionToken === createAdminSessionToken();
+
+  return sessionToken === expected;
+}
+
+export function buildAdminSessionCookie(token: string) {
+  return {
+    name: ADMIN_COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: getAdminSessionMaxAgeSeconds()
+  };
+}
+
+export function buildClearAdminSessionCookie() {
+  return {
+    name: ADMIN_COOKIE_NAME,
+    value: "",
+    maxAge: 0,
+    path: "/"
+  };
 }
