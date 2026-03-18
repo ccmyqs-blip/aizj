@@ -20,6 +20,19 @@ export function getAdminSessionMaxAgeSeconds() {
   return Math.floor(value);
 }
 
+function shouldUseSecureCookie() {
+  const forced = process.env.COOKIE_SECURE?.trim().toLowerCase();
+  if (forced === "true") {
+    return true;
+  }
+  if (forced === "false") {
+    return false;
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().toLowerCase() ?? "";
+  return siteUrl.startsWith("https://");
+}
+
 export function createAdminSessionToken(password: string) {
   return hashAdminPassword(password);
 }
@@ -52,7 +65,7 @@ export function buildAdminSessionCookie(token: string) {
     value: token,
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: getAdminSessionMaxAgeSeconds()
   };

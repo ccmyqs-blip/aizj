@@ -37,6 +37,11 @@ export type GenerateAnswerResult = {
   modelName: string;
 };
 
+export type ConversationTurn = {
+  question: string;
+  answer: string;
+};
+
 type DashscopeMessage = {
   role: "system" | "user";
   content: string;
@@ -80,11 +85,30 @@ function buildEvidence(contextChunks: LLMContextChunk[]) {
     .join("\n\n");
 }
 
-function buildMessages(question: string, contextChunks: LLMContextChunk[]): DashscopeMessage[] {
-  const userPrompt = HARD_CONSTRAINT_QA_USER_PROMPT_TEMPLATE.replace("{{question}}", question).replace(
-    "{{contextChunks}}",
-    buildEvidence(contextChunks)
-  );
+function buildConversationHistoryBlock(conversationTurns: ConversationTurn[]) {
+  if (conversationTurns.length === 0) {
+    return "";
+  }
+
+  const lines = conversationTurns.slice(-6).map((turn, index) => {
+    const q = normalizeLine(turn.question).slice(0, 200);
+    const a = normalizeLine(turn.answer).slice(0, 300);
+    return `第${index + 1}轮\n用户: ${q}\n助手: ${a}`;
+  });
+
+  return `\n\n对话历史（仅用于理解用户上下文，不可作为依据）：\n${lines.join("\n\n")}`;
+}
+
+function buildMessages(
+  question: string,
+  contextChunks: LLMContextChunk[],
+  conversationTurns: ConversationTurn[] = []
+): DashscopeMessage[] {
+  const userPrompt =
+    HARD_CONSTRAINT_QA_USER_PROMPT_TEMPLATE.replace("{{question}}", question).replace(
+      "{{contextChunks}}",
+      buildEvidence(contextChunks)
+    ) + buildConversationHistoryBlock(conversationTurns);
 
   return [
     {
@@ -215,16 +239,9 @@ function buildAnswerWithStrictCitations(
     normalizeLine(parsed.risk) ||
     "具体仍需结合合同、补充协议、招标文件、答疑纪要、签证单、联系单、往来函件及项目资料综合判断。";
 
-  const answer = [
-    "一、结论",
-    `- ${conclusion}`,
-    "",
-    "二、依据",
-    ...evidenceLines,
-    "",
-    "三、风险提示",
-    `- ${risk}`
-  ].join("\n");
+  const answer = ["一、结论", `- ${conclusion}`, "", "二、依据", ...evidenceLines, "", "三、风险提示", `- ${risk}`].join(
+    "\n"
+  );
 
   return {
     answer,
@@ -234,7 +251,10 @@ function buildAnswerWithStrictCitations(
 
 export async function generateAnswer(
   question: string,
-  contextChunks: LLMContextChunk[]
+  contextChunks: LLMContextChunk[],
+  options?: {
+    conversationTurns?: ConversationTurn[];
+  }
 ): Promise<GenerateAnswerResult> {
   const startTime = Date.now();
   const modelName = process.env.DASHSCOPE_MODEL ?? DEFAULT_MODEL;
@@ -250,7 +270,7 @@ export async function generateAnswer(
     return fallbackResult(modelName);
   }
 
-  const messages = buildMessages(question, contextChunks);
+  const messages = buildMessages(question, contextChunks, options?.conversationTurns ?? []);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 

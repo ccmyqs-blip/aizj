@@ -274,6 +274,10 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
     }
   };
 
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="space-y-6">
       <section className="panel p-4">
@@ -310,8 +314,19 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
               type="file"
               accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-              className="block w-full max-w-md text-sm text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700"
+              className="hidden"
             />
+            <button
+              type="button"
+              onClick={openFilePicker}
+              disabled={uploading}
+              className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              选择文件
+            </button>
+            <p className="max-w-[520px] truncate text-xs text-slate-600">
+              {uploadFile ? `已选择：${uploadFile.name}` : "未选择文件（支持 PDF / DOC / DOCX）"}
+            </p>
             <button type="submit" disabled={uploading} className="btn-primary">
               {uploading ? "上传中..." : "上传文档"}
             </button>

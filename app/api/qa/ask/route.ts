@@ -1,21 +1,27 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateAnswer } from "@/lib/llm";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/request-ip";
 import { getDefaultChunkRetriever } from "@/lib/qa/retriever";
 import type { QACitation } from "@/lib/qa/types";
 import { getAuthenticatedUserFromRequest } from "@/lib/user-auth";
 
 const askSchema = z.object({
-  question: z.string().min(4, "问题过短，请补充具体场景").max(300, "问题过长，请精简后再试")
+  question: z.string().trim().min(4, "问题过短，请补充具体场景").max(300, "问题过长，请精简后再试"),
+  conversationId: z.string().trim().min(1).max(64).optional()
 });
 
-function getClientIp(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? null;
+function buildConversationTitle(question: string) {
+  const normalized = question.replace(/\s+/g, " ").trim();
+  return normalized.length > 30 ? `${normalized.slice(0, 30)}...` : normalized;
+}
+
+function buildRetrieverQuery(question: string, previousQuestions: string[]) {
+  if (previousQuestions.length === 0) {
+    return question;
   }
-  return request.headers.get("x-real-ip");
+  return [...previousQuestions, question].join(" ");
 }
 
 export async function POST(request: Request) {
@@ -31,12 +37,77 @@ export async function POST(request: Request) {
 
   try {
     const question = parsed.data.question.trim();
+    const incomingConversationId = parsed.data.conversationId?.trim() || null;
     const userAgent = request.headers.get("user-agent");
     const ip = getClientIp(request);
     const user = await getAuthenticatedUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ message: "请先登录后再提问" }, { status: 401 });
+    }
+
+    let conversationId = "";
+    let turnIndex = 1;
+    let conversationTurns: Array<{ question: string; answer: string }> = [];
+    let previousQuestions: string[] = [];
+
+    if (incomingConversationId) {
+      const conversation = await prisma.qAConversation.findFirst({
+        where: {
+          id: incomingConversationId,
+          userId: user.id
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!conversation) {
+        return NextResponse.json({ message: "会话不存在或无权限访问" }, { status: 404 });
+      }
+
+      conversationId = conversation.id;
+
+      const previousRecords = await prisma.qARecord.findMany({
+        where: {
+          userId: user.id,
+          conversationId
+        },
+        orderBy: [{ turnIndex: "desc" }, { createdAt: "desc" }],
+        take: 6,
+        select: {
+          question: true,
+          answer: true,
+          turnIndex: true
+        }
+      });
+
+      const ordered = previousRecords.slice().reverse();
+      conversationTurns = ordered.map((item) => ({
+        question: item.question,
+        answer: item.answer
+      }));
+      previousQuestions = ordered.map((item) => item.question).slice(-3);
+      turnIndex = (previousRecords[0]?.turnIndex ?? 0) + 1;
+    } else {
+      const createdConversation = await prisma.qAConversation.create({
+        data: {
+          userId: user.id,
+          title: buildConversationTitle(question)
+        },
+        select: {
+          id: true
+        }
+      });
+
+      conversationId = createdConversation.id;
+      turnIndex = 1;
+    }
 
     const retriever = getDefaultChunkRetriever();
-    const retrievedChunks = await retriever.retrieve(question, { topK: 6 });
+    const retrievalQuery = buildRetrieverQuery(question, previousQuestions);
+    const retrievedChunks = await retriever.retrieve(retrievalQuery, {
+      topK: previousQuestions.length > 0 ? 8 : 6
+    });
 
     const llmResult = await generateAnswer(
       question,
@@ -48,7 +119,10 @@ export async function POST(request: Request) {
         sectionTitle: item.sectionTitle,
         pageNumber: item.pageNumber,
         chunkText: item.chunkText
-      }))
+      })),
+      {
+        conversationTurns
+      }
     );
 
     const answer = llmResult.answer;
@@ -58,7 +132,9 @@ export async function POST(request: Request) {
     const savedRecord = await prisma.qARecord
       .create({
         data: {
-          userId: user?.id ?? null,
+          userId: user.id,
+          conversationId,
+          turnIndex,
           question,
           answer,
           sourceChunkIds: JSON.stringify(citations.map((item) => item.chunkId)),
@@ -72,11 +148,24 @@ export async function POST(request: Request) {
       })
       .catch(() => null);
 
+    await prisma.qAConversation
+      .update({
+        where: {
+          id: conversationId
+        },
+        data: {
+          updatedAt: new Date()
+        }
+      })
+      .catch(() => null);
+
     return NextResponse.json({
       answer,
       citations,
       modelName,
-      recordId: savedRecord?.id ?? null
+      recordId: savedRecord?.id ?? null,
+      conversationId,
+      turnIndex
     });
   } catch {
     return NextResponse.json({ message: "问答服务暂时不可用" }, { status: 500 });

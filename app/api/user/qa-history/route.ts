@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUserFromRequest } from "@/lib/user-auth";
 
 const querySchema = z.object({
-  take: z.coerce.number().int().min(1).max(200).optional().default(50)
+  take: z.coerce.number().int().min(1).max(200).optional().default(80)
 });
 
 export async function GET(request: Request) {
@@ -22,30 +22,44 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "参数错误" }, { status: 400 });
   }
 
-  const rows = await prisma.qARecord.findMany({
+  const rows = await prisma.qAConversation.findMany({
     where: {
       userId: user.id
     },
     orderBy: {
-      createdAt: "desc"
+      updatedAt: "desc"
     },
     take: parsed.data.take,
     select: {
       id: true,
-      question: true,
-      answer: true,
-      modelName: true,
-      createdAt: true
+      title: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          records: true
+        }
+      },
+      records: {
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: 1,
+        select: {
+          question: true
+        }
+      }
     }
   });
 
   return NextResponse.json({
     items: rows.map((item) => ({
       id: item.id,
-      question: item.question,
-      answerPreview: item.answer.slice(0, 120),
-      modelName: item.modelName,
-      createdAt: item.createdAt.toISOString()
+      title: item.title,
+      lastQuestion: item.records[0]?.question ?? "",
+      messageCount: item._count.records,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString()
     }))
   });
 }

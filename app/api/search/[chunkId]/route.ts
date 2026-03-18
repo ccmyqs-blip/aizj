@@ -36,5 +36,9 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ message: "未找到条款内容" }, { status: 404 });
   }
 
+  if (!chunk.document.source?.startsWith("/uploads/documents/")) {
+    return NextResponse.json({ message: "条款内容不存在或已下线" }, { status: 404 });
+  }
+
   return NextResponse.json(chunk);
 }

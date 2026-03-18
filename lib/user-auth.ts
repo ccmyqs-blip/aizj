@@ -6,6 +6,19 @@ export const USER_SESSION_COOKIE_NAME = "eca_user_session";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
+function shouldUseSecureCookie() {
+  const forced = process.env.COOKIE_SECURE?.trim().toLowerCase();
+  if (forced === "true") {
+    return true;
+  }
+  if (forced === "false") {
+    return false;
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().toLowerCase() ?? "";
+  return siteUrl.startsWith("https://");
+}
+
 function hashToken(token: string) {
   return createHash("sha256").update(`eca-user:${token}`).digest("hex");
 }
@@ -170,7 +183,7 @@ export function buildUserSessionCookie(token: string) {
     value: token,
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS
   };

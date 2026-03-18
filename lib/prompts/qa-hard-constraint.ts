@@ -67,7 +67,7 @@ export const HARD_CONSTRAINT_QA_USER_PROMPT_TEMPLATE = `用户问题：
 
 请严格基于以上依据片段回答，不允许使用片段外的知识补充具体条文内容。`;
 
-export const STRICT_JSON_OUTPUT_PROTOCOL = `你必须仅输出 JSON，不要输出 markdown，不要输出多余解释。JSON 结构必须为：
+export const STRICT_JSON_OUTPUT_PROTOCOL = `你必须只输出 JSON，不要输出 markdown，不要输出多余解释。JSON 结构必须为：
 {
   "canAnswer": boolean,
   "conclusion": "string",
@@ -80,7 +80,8 @@ export const STRICT_JSON_OUTPUT_PROTOCOL = `你必须仅输出 JSON，不要输�
   "risk": "string"
 }
 要求：
-1) evidence 中每个 chunkId 必须来自可用依据片段中的 chunkId。
+1) evidence 中每个 chunkId 必须来自“可用依据片段”中的 chunkId。
 2) 如果依据不足，canAnswer 必须为 false，evidence 必须为空数组。`;
 
-export const INSUFFICIENT_EVIDENCE_TEXT = "根据当前提供的依据，暂不足以支持明确结论。现有片段未能直接回答该问题，建议进一步补充合同条款或项目资料。";
+export const INSUFFICIENT_EVIDENCE_TEXT =
+  "根据当前提供的依据，暂不足以支持明确结论。现有片段未能直接回答该问题，建议进一步补充合同条款或项目资料。";

@@ -10,8 +10,8 @@ import { getAuthenticatedUser } from "@/lib/user-auth";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  title: "查规范·查依据·问规则",
-  description: "工程造价规范检索与问答工具：查规范、查依据、问规则、试用。",
+  title: "查规范、查依据、问规则",
+  description: "工程造价规范检索与问答工具：查规范、查依据、问规则、申请试用。",
   keywords: ["工程造价", "规范检索", "计价依据", "造价问答", "试用"],
   alternates: {
     canonical: "/"

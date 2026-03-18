@@ -27,6 +27,8 @@
 - `docker-compose.yml`
 - `deploy/nginx/default.conf`
 - `.env.example`
+- `scripts/deploy-low-io.ps1`
+- `scripts/server-apply-release.sh`
 
 ## 3. 环境变量
 
@@ -104,6 +106,23 @@ docker compose logs -f web --tail=200
 ```bash
 docker compose up -d --build
 ```
+
+### 5.1 低 IO 更新（推荐，适配 2核2G）
+
+适用场景：云服务器无法稳定访问 GitHub / Docker Hub，或服务器本机构建容易卡顿。
+
+在本地执行（PowerShell）：
+
+```powershell
+./scripts/deploy-low-io.ps1 -Server root@114.55.229.142 -RemoteDir /opt/aizj -GitRef test
+```
+
+该脚本会执行：
+
+1. 本地打包当前 Git 引用源码。
+2. 本地构建 `linux/amd64` 的 `aizj-web:latest` 镜像并导出 tar。
+3. 上传源码包与镜像包到服务器。
+4. 服务器加载镜像并 `docker compose up -d --no-build`，避免服务器高 IO 构建。
 
 ## 6. 最终上线命令清单（建议顺序）
 

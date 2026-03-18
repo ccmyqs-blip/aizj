@@ -5,7 +5,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 
 type LimitRule = {
-  name: "qa" | "trial" | "admin";
+  name: "qa" | "trial" | "admin_page" | "admin_api";
   limit: number;
   windowMs: number;
   match: (pathname: string) => boolean;
@@ -30,14 +30,18 @@ const LIMIT_RULES: LimitRule[] = [
       pathname.startsWith("/api/leads/")
   },
   {
-    name: "admin",
-    limit: 3,
+    name: "admin_page",
+    limit: 20,
     windowMs: 60_000,
     match: (pathname) =>
       pathname === "/admin" ||
-      pathname.startsWith("/admin/") ||
-      pathname === "/api/admin" ||
-      pathname.startsWith("/api/admin/")
+      pathname.startsWith("/admin/")
+  },
+  {
+    name: "admin_api",
+    limit: 3,
+    windowMs: 60_000,
+    match: (pathname) => pathname === "/api/admin" || pathname.startsWith("/api/admin/")
   }
 ];
 

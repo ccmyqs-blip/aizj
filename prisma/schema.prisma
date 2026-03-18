@@ -64,6 +64,8 @@ model DocumentChunkEmbedding {
 model QARecord {
   id             String   @id @default(cuid())
   userId         String?
+  conversationId String?
+  turnIndex      Int?
   question       String
   answer         String
   sourceChunkIds String?
@@ -72,10 +74,24 @@ model QARecord {
   ip             String?
   userAgent      String?
   user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation   QAConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([modelName])
   @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model QAConversation {
+  id        String     @id @default(cuid())
+  userId    String
+  title     String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records   QARecord[]
+
+  @@index([userId, updatedAt])
 }
 
 model Lead {
@@ -133,6 +149,7 @@ model User {
   updatedAt    DateTime      @updatedAt
   sessions     UserSession[]
   qaRecords    QARecord[]
+  qaConversations QAConversation[]
 }
 
 model UserSession {

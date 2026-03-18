@@ -64,7 +64,7 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  const [leads, qaRecords, feedbacks, uploadedDocuments, documentCount, chunkCount] = await prisma.$transaction([
+  const [leads, qaRecords, feedbacks, uploadedDocuments, uploadedDocumentCount, uploadedChunkCount] = await prisma.$transaction([
     prisma.lead.findMany({
       orderBy: {
         createdAt: "desc"
@@ -134,8 +134,22 @@ export default async function AdminPage() {
         createdAt: true
       }
     }),
-    prisma.document.count(),
-    prisma.documentChunk.count()
+    prisma.document.count({
+      where: {
+        source: {
+          startsWith: "/uploads/documents/"
+        }
+      }
+    }),
+    prisma.documentChunk.count({
+      where: {
+        document: {
+          source: {
+            startsWith: "/uploads/documents/"
+          }
+        }
+      }
+    })
   ]);
 
   const serializedLeads = leads.map((item) => ({
@@ -220,11 +234,11 @@ export default async function AdminPage() {
       <section className="grid gap-4 md:grid-cols-4">
         <article className="panel p-4">
           <p className="text-xs text-slate-500">规范文档数</p>
-          <p className="mt-2 text-2xl font-semibold text-brand-900">{documentCount}</p>
+          <p className="mt-2 text-2xl font-semibold text-brand-900">{uploadedDocumentCount}</p>
         </article>
         <article className="panel p-4">
           <p className="text-xs text-slate-500">条款切片数</p>
-          <p className="mt-2 text-2xl font-semibold text-brand-900">{chunkCount}</p>
+          <p className="mt-2 text-2xl font-semibold text-brand-900">{uploadedChunkCount}</p>
         </article>
         <article className="panel p-4">
           <p className="text-xs text-slate-500">留资线索数</p>

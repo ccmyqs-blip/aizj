@@ -27,8 +27,16 @@ export async function GET(request: Request) {
   const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE);
 
   const keywords = normalizeKeywords(keyword);
+  const uploadedDocumentScope = {
+    document: {
+      source: {
+        startsWith: "/uploads/documents/"
+      }
+    }
+  };
 
   const andConditions: Array<Record<string, unknown>> = [];
+  andConditions.push(uploadedDocumentScope);
 
   if (category && category !== "all") {
     andConditions.push({
@@ -78,6 +86,11 @@ export async function GET(request: Request) {
       }
     }),
     prisma.document.findMany({
+      where: {
+        source: {
+          startsWith: "/uploads/documents/"
+        }
+      },
       select: {
         category: true
       },
