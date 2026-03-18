@@ -5,11 +5,25 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { logSecurityEvent } from "@/lib/security-log";
 
 type LimitRule = {
-  name: "qa" | "trial" | "admin_page" | "admin_api";
+  name: "qa" | "trial" | "admin_page" | "admin_api" | "admin_upload" | "admin_documents_delete";
   limit: number;
   windowMs: number;
   match: (pathname: string) => boolean;
 };
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+const ADMIN_UPLOAD_LIMIT_PER_MINUTE = parsePositiveInt(process.env.ADMIN_UPLOAD_RATE_LIMIT_PER_MINUTE, 20);
+const ADMIN_DOCUMENT_DELETE_LIMIT_PER_MINUTE = parsePositiveInt(
+  process.env.ADMIN_DOCUMENT_DELETE_RATE_LIMIT_PER_MINUTE,
+  20
+);
 
 const LIMIT_RULES: LimitRule[] = [
   {
@@ -28,6 +42,25 @@ const LIMIT_RULES: LimitRule[] = [
       pathname.startsWith("/api/trial/") ||
       pathname === "/api/leads" ||
       pathname.startsWith("/api/leads/")
+  },
+  {
+    // Allow higher rate for multi-file admin upload, while keeping admin API strict elsewhere.
+    name: "admin_upload",
+    limit: ADMIN_UPLOAD_LIMIT_PER_MINUTE,
+    windowMs: 60_000,
+    match: (pathname) =>
+      pathname === "/api/admin/documents/upload" ||
+      pathname.startsWith("/api/admin/documents/upload/")
+  },
+  {
+    // Document delete can be batched from admin UI; keep separate from strict admin_api bucket.
+    name: "admin_documents_delete",
+    limit: ADMIN_DOCUMENT_DELETE_LIMIT_PER_MINUTE,
+    windowMs: 60_000,
+    match: (pathname) =>
+      pathname.startsWith("/api/admin/documents/") &&
+      pathname !== "/api/admin/documents/upload" &&
+      !pathname.startsWith("/api/admin/documents/upload/")
   },
   {
     name: "admin_page",

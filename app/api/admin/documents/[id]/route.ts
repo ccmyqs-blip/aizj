@@ -1,7 +1,11 @@
-import path from "node:path";
 import { promises as fs } from "node:fs";
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
+import {
+  getCandidateAbsolutePathsByFileName,
+  getFileNameFromDocumentSource,
+  isUploadedDocumentSource
+} from "@/lib/document-storage";
 import { prisma } from "@/lib/prisma";
 
 type Params = {
@@ -12,15 +16,6 @@ type Params = {
 
 function unauthorized() {
   return NextResponse.json({ message: "未登录或会话失效" }, { status: 401 });
-}
-
-function isUploadedDocumentSource(source: string | null) {
-  return Boolean(source && source.startsWith("/uploads/documents/"));
-}
-
-function toAbsolutePublicPath(publicPath: string) {
-  const relative = publicPath.replace(/^\/+/, "");
-  return path.join(process.cwd(), "public", relative);
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
@@ -59,8 +54,10 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ message: "文档删除失败，请稍后重试" }, { status: 500 });
   }
 
-  const absoluteFilePath = toAbsolutePublicPath(target.source!);
-  await fs.rm(absoluteFilePath, { force: true }).catch(() => undefined);
+  const fileName = getFileNameFromDocumentSource(target.source);
+  const candidatePaths = fileName ? getCandidateAbsolutePathsByFileName(fileName) : [];
+  await Promise.all(candidatePaths.map((item) => fs.rm(item, { force: true }).catch(() => undefined)));
 
   return NextResponse.json({ message: "文档删除成功" });
 }
+

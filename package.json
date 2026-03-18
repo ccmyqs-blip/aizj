@@ -13,6 +13,7 @@
     "setup:local": "npm run prisma:dbpush && npm run import:docs -- data/sample-docs.json && npm run seed:admin-config",
     "import:docs": "tsx scripts/import-docs.ts",
     "seed:admin-config": "tsx scripts/seed-admin-config.ts",
+    "ingest:rebuild": "tsx scripts/rebuild-ingest.ts",
     "prisma:generate": "tsx scripts/prisma-run.ts generate",
     "prisma:migrate": "tsx scripts/prisma-run.ts migrate dev --skip-generate",
     "prisma:deploy": "tsx scripts/prisma-run.ts migrate deploy",

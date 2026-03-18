@@ -1,4 +1,4 @@
-﻿export const DOCUMENT_STATUSES = ["ACTIVE", "ARCHIVED", "DRAFT"] as const;
+﻿export const DOCUMENT_STATUSES = ["ACTIVE", "PROCESSING", "FAILED", "ARCHIVED", "DRAFT"] as const;
 export type DocumentStatusValue = (typeof DOCUMENT_STATUSES)[number];
 
 export const LEAD_STATUSES = ["NEW", "CONTACTED", "IN_PROGRESS", "CONVERTED", "INVALID"] as const;

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { FEEDBACK_STATUSES, LEAD_STATUSES, type FeedbackStatusValue, type LeadStatusValue } from "@/lib/constants/status";
+import { startDocumentIngestWorker } from "@/lib/document-upload-queue";
 import { prisma } from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
 import { logSecurityEvent } from "@/lib/security-log";
@@ -64,7 +65,18 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  const [leads, qaRecords, feedbacks, uploadedDocuments, uploadedDocumentCount, uploadedChunkCount] = await prisma.$transaction([
+  await startDocumentIngestWorker().catch(() => undefined);
+
+  const [
+    leads,
+    qaRecords,
+    feedbacks,
+    uploadedDocuments,
+    uploadedDocumentCount,
+    uploadedChunkCount,
+    uploadedQualityRows,
+    uploadedNoChunkCount
+  ] = await prisma.$transaction([
     prisma.lead.findMany({
       orderBy: {
         createdAt: "desc"
@@ -149,8 +161,43 @@ export default async function AdminPage() {
           }
         }
       }
+    }),
+    prisma.document.findMany({
+      where: {
+        source: {
+          startsWith: "/uploads/documents/"
+        }
+      },
+      select: {
+        status: true,
+        ingestStage: true,
+        textCoverage: true,
+        ocrUsed: true
+      }
+    }),
+    prisma.document.count({
+      where: {
+        source: {
+          startsWith: "/uploads/documents/"
+        },
+        chunks: {
+          none: {}
+        }
+      }
     })
   ]);
+
+  const qualityTotal = uploadedQualityRows.length;
+  const qualityActive = uploadedQualityRows.filter((item) => item.status === "ACTIVE" && item.ingestStage === "COMPLETED").length;
+  const qualityFailed = uploadedQualityRows.filter((item) => item.status === "FAILED" || item.ingestStage === "FAILED").length;
+  const qualityProcessing = uploadedQualityRows.filter((item) =>
+    item.status === "PROCESSING" || ["EXTRACTING", "CHUNKING", "EMBEDDING"].includes(item.ingestStage)
+  ).length;
+  const avgTextCoverage =
+    qualityTotal > 0
+      ? uploadedQualityRows.reduce((sum, item) => sum + (Number.isFinite(item.textCoverage) ? item.textCoverage : 0), 0) / qualityTotal
+      : 0;
+  const ocrHitRate = qualityTotal > 0 ? uploadedQualityRows.filter((item) => item.ocrUsed).length / qualityTotal : 0;
 
   const serializedLeads = leads.map((item) => ({
     id: item.id,
@@ -247,6 +294,30 @@ export default async function AdminPage() {
         <article className="panel p-4">
           <p className="text-xs text-slate-500">反馈留言数</p>
           <p className="mt-2 text-2xl font-semibold text-brand-900">{serializedFeedbacks.length}</p>
+        </article>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-5">
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">质量状态 ACTIVE</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-700">{qualityActive}</p>
+        </article>
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">质量状态 FAILED</p>
+          <p className="mt-2 text-2xl font-semibold text-rose-700">{qualityFailed}</p>
+        </article>
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">质量状态 PROCESSING</p>
+          <p className="mt-2 text-2xl font-semibold text-amber-700">{qualityProcessing}</p>
+        </article>
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">平均 textCoverage</p>
+          <p className="mt-2 text-2xl font-semibold text-brand-900">{(avgTextCoverage * 100).toFixed(1)}%</p>
+          <p className="mt-1 text-[11px] text-slate-500">无 chunk 文档: {uploadedNoChunkCount}</p>
+        </article>
+        <article className="panel p-4">
+          <p className="text-xs text-slate-500">OCR 命中率</p>
+          <p className="mt-2 text-2xl font-semibold text-brand-900">{(ocrHitRate * 100).toFixed(1)}%</p>
         </article>
       </section>
 

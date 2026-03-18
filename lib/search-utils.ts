@@ -1,33 +1,40 @@
+import { expandWithDomainSynonyms } from "@/lib/qa/domain-synonyms";
+
 export function normalizeKeywords(input: string) {
-  const cleaned = input.trim();
+  const cleaned = input.replace(/\s+/g, " ").trim();
   if (!cleaned) {
     return [];
   }
 
   const tokens = cleaned
-    .split(/[\s,，。；;、|]+/)
+    .split(/[\s,，。；;、:：()（）【】\[\]{}"'“”‘’/\\|!?！？]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 
-  if (tokens.length === 0) {
-    return [cleaned];
-  }
+  const baseTokens = tokens.length > 0 ? tokens : [cleaned];
 
   const expanded: string[] = [];
 
-  for (const token of tokens) {
+  for (const token of baseTokens) {
     expanded.push(token);
 
     const isCjk = /[\u4e00-\u9fff]/.test(token);
-    if (isCjk && token.length >= 4) {
-      const maxBigrams = 8;
+    if (isCjk && token.length >= 3) {
+      const maxBigrams = 12;
       for (let i = 0; i < token.length - 1 && i < maxBigrams; i += 1) {
         expanded.push(token.slice(i, i + 2));
       }
     }
+
+    if (isCjk && token.length >= 5) {
+      const maxTrigrams = 8;
+      for (let i = 0; i < token.length - 2 && i < maxTrigrams; i += 1) {
+        expanded.push(token.slice(i, i + 3));
+      }
+    }
   }
 
-  return Array.from(new Set(expanded)).slice(0, 12);
+  return expandWithDomainSynonyms(expanded, 40);
 }
 
 export function buildSnippet(text: string, keywords: string[], maxLength = 120) {

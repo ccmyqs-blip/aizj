@@ -5,6 +5,7 @@ import { buildSnippet, normalizeKeywords } from "@/lib/search-utils";
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 20;
+const MIN_QUALITY_TEXT_COVERAGE = Number(process.env.RETRIEVER_MIN_TEXT_COVERAGE ?? 0.2);
 
 function parsePositiveInt(value: string | null, fallback: number) {
   if (!value) {
@@ -29,6 +30,11 @@ export async function GET(request: Request) {
   const keywords = normalizeKeywords(keyword);
   const uploadedDocumentScope = {
     document: {
+      status: "ACTIVE",
+      ingestStage: "COMPLETED",
+      textCoverage: {
+        gte: MIN_QUALITY_TEXT_COVERAGE
+      },
       source: {
         startsWith: "/uploads/documents/"
       }
@@ -46,26 +52,26 @@ export async function GET(request: Request) {
     });
   }
 
-  keywords.forEach((token) => {
+  if (keywords.length > 0) {
     andConditions.push({
       OR: [
-        { chunkText: { contains: token } },
-        { chapterTitle: { contains: token } },
-        { sectionTitle: { contains: token } },
-        { document: { title: { contains: token } } },
-        { document: { code: { contains: token } } }
+        ...keywords.flatMap((token) => [
+          { chunkText: { contains: token } },
+          { chapterTitle: { contains: token } },
+          { sectionTitle: { contains: token } },
+          { keywords: { contains: token } },
+          { document: { title: { contains: token } } },
+          { document: { code: { contains: token } } }
+        ])
       ]
     });
-  });
+  }
 
   const where = andConditions.length > 0 ? { AND: andConditions } : {};
 
-  const [total, chunks, categoryRows] = await prisma.$transaction([
-    prisma.documentChunk.count({ where }),
+  const [chunks, categoryRows] = await prisma.$transaction([
     prisma.documentChunk.findMany({
       where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
       orderBy: [{ document: { publishDate: "desc" } }, { sortOrder: "asc" }],
       select: {
         id: true,
@@ -80,6 +86,7 @@ export async function GET(request: Request) {
             title: true,
             code: true,
             category: true,
+            source: true,
             publishDate: true
           }
         }
@@ -87,6 +94,11 @@ export async function GET(request: Request) {
     }),
     prisma.document.findMany({
       where: {
+        status: "ACTIVE",
+        ingestStage: "COMPLETED",
+        textCoverage: {
+          gte: MIN_QUALITY_TEXT_COVERAGE
+        },
         source: {
           startsWith: "/uploads/documents/"
         }
@@ -101,19 +113,54 @@ export async function GET(request: Request) {
     })
   ]);
 
-  const results = chunks.map((chunk) => ({
-    chunkId: chunk.id,
-    documentId: chunk.document.id,
-    title: chunk.document.title,
-    code: chunk.document.code,
-    category: chunk.document.category,
-    chapterTitle: chunk.chapterTitle ?? "",
-    sectionTitle: chunk.sectionTitle ?? "",
-    pageNumber: chunk.pageNumber ?? null,
-    sortOrder: chunk.sortOrder,
-    publishDate: chunk.document.publishDate?.toISOString() ?? null,
-    snippet: buildSnippet(chunk.chunkText, keywords)
-  }));
+  const grouped = new Map<
+    string,
+    {
+      documentId: string;
+      title: string;
+      code: string;
+      category: string;
+      source: string | null;
+      publishDate: string | null;
+      bestChunkId: string;
+      bestChapterTitle: string;
+      bestSectionTitle: string;
+      bestPageNumber: number | null;
+      bestSortOrder: number;
+      snippet: string;
+      matchChunkCount: number;
+    }
+  >();
+
+  for (const chunk of chunks) {
+    const existing = grouped.get(chunk.document.id);
+    if (!existing) {
+      grouped.set(chunk.document.id, {
+        documentId: chunk.document.id,
+        title: chunk.document.title,
+        code: chunk.document.code,
+        category: chunk.document.category,
+        source: chunk.document.source,
+        publishDate: chunk.document.publishDate?.toISOString() ?? null,
+        bestChunkId: chunk.id,
+        bestChapterTitle: chunk.chapterTitle ?? "",
+        bestSectionTitle: chunk.sectionTitle ?? "",
+        bestPageNumber: chunk.pageNumber ?? null,
+        bestSortOrder: chunk.sortOrder,
+        snippet: buildSnippet(chunk.chunkText, keywords),
+        matchChunkCount: 1
+      });
+      continue;
+    }
+
+    existing.matchChunkCount += 1;
+  }
+
+  const groupedResults = Array.from(grouped.values());
+  const total = groupedResults.length;
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  const results = groupedResults.slice(start, end);
 
   return NextResponse.json({
     keyword,

@@ -4,6 +4,7 @@ import { generateAnswer } from "@/lib/llm";
 import { prisma } from "@/lib/prisma";
 import { getClientIp } from "@/lib/request-ip";
 import { getDefaultChunkRetriever } from "@/lib/qa/retriever";
+import { startDocumentIngestWorker } from "@/lib/document-upload-queue";
 import type { QACitation } from "@/lib/qa/types";
 import { getAuthenticatedUserFromRequest } from "@/lib/user-auth";
 
@@ -15,13 +16,6 @@ const askSchema = z.object({
 function buildConversationTitle(question: string) {
   const normalized = question.replace(/\s+/g, " ").trim();
   return normalized.length > 30 ? `${normalized.slice(0, 30)}...` : normalized;
-}
-
-function buildRetrieverQuery(question: string, previousQuestions: string[]) {
-  if (previousQuestions.length === 0) {
-    return question;
-  }
-  return [...previousQuestions, question].join(" ");
 }
 
 export async function POST(request: Request) {
@@ -36,6 +30,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    void startDocumentIngestWorker();
+
     const question = parsed.data.question.trim();
     const incomingConversationId = parsed.data.conversationId?.trim() || null;
     const userAgent = request.headers.get("user-agent");
@@ -104,10 +100,21 @@ export async function POST(request: Request) {
     }
 
     const retriever = getDefaultChunkRetriever();
-    const retrievalQuery = buildRetrieverQuery(question, previousQuestions);
+    // Retrieval should focus on current user question.
+    // Conversation history is still passed to LLM for continuity.
+    const retrievalQuery = question;
     const retrievedChunks = await retriever.retrieve(retrievalQuery, {
-      topK: previousQuestions.length > 0 ? 8 : 6
+      topK: previousQuestions.length > 0 ? 10 : 8
     });
+    const topChunkIds = retrievedChunks.map((item) => item.chunkId);
+    const topChunkScores = retrievedChunks.map((item) => Number(item.score.toFixed(4)));
+
+    console.info(
+      `[qa] retrieval question="${question.slice(0, 60)}" chunks=${retrievedChunks.length} topTitles=${retrievedChunks
+        .slice(0, 3)
+        .map((item) => item.documentTitle)
+        .join(" | ")}`
+    );
 
     const llmResult = await generateAnswer(
       question,
@@ -139,6 +146,10 @@ export async function POST(request: Request) {
           answer,
           sourceChunkIds: JSON.stringify(citations.map((item) => item.chunkId)),
           modelName,
+          retrievalQuery,
+          retrievedChunkCount: retrievedChunks.length,
+          topChunkIds: JSON.stringify(topChunkIds),
+          topChunkScores: JSON.stringify(topChunkScores),
           ip,
           userAgent
         },

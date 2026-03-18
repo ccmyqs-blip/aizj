@@ -8,23 +8,33 @@ datasource db {
 }
 
 model Document {
-  id          String         @id @default(cuid())
-  title       String
-  code        String
-  category    String
-  source      String?
-  version     String         @default("v1")
-  publishDate DateTime?
-  status      String         @default("ACTIVE")
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  chunks      DocumentChunk[]
+  id              String              @id @default(cuid())
+  title           String
+  code            String
+  category        String
+  source          String?
+  version         String              @default("v1")
+  publishDate     DateTime?
+  status          String              @default("ACTIVE")
+  ingestError     String?
+  ingestStage     String              @default("COMPLETED")
+  textCoverage    Float               @default(0)
+  pageCount       Int                 @default(0)
+  parsedPageCount Int                 @default(0)
+  ocrUsed         Boolean             @default(false)
+  lastIngestAt    DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  chunks          DocumentChunk[]
+  ingestJobs      DocumentIngestJob[]
 
   @@unique([code, version])
   @@index([title])
   @@index([category])
   @@index([status])
   @@index([publishDate])
+  @@index([ingestStage, status])
+  @@index([lastIngestAt])
 }
 
 model DocumentChunk {
@@ -62,24 +72,46 @@ model DocumentChunkEmbedding {
 }
 
 model QARecord {
-  id             String   @id @default(cuid())
-  userId         String?
-  conversationId String?
-  turnIndex      Int?
-  question       String
-  answer         String
-  sourceChunkIds String?
-  modelName      String?
-  createdAt      DateTime @default(now())
-  ip             String?
-  userAgent      String?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  conversation   QAConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  id                  String          @id @default(cuid())
+  userId              String?
+  conversationId      String?
+  turnIndex           Int?
+  question            String
+  answer              String
+  sourceChunkIds      String?
+  modelName           String?
+  retrievalQuery      String?
+  retrievedChunkCount Int             @default(0)
+  topChunkIds         String?
+  topChunkScores      String?
+  createdAt           DateTime        @default(now())
+  ip                  String?
+  userAgent           String?
+  user                User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation        QAConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([modelName])
   @@index([userId, createdAt])
   @@index([conversationId, createdAt])
+}
+
+model DocumentIngestJob {
+  id         String   @id @default(cuid())
+  documentId String
+  status     String   @default("PENDING")
+  attempt    Int      @default(0)
+  filePath   String
+  fileName   String
+  startedAt  DateTime?
+  finishedAt DateTime?
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([documentId, createdAt])
 }
 
 model QAConversation {

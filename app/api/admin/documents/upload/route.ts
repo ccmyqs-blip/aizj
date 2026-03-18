@@ -1,21 +1,40 @@
-﻿import { promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
+import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateChunksFromDocument } from "@/lib/document-ingest";
-import { embedTextWithBothModels } from "@/lib/embedding";
+import { enqueueDocumentIngest } from "@/lib/document-upload-queue";
+import {
+  buildDocumentPublicPath,
+  getUploadStorageDir
+} from "@/lib/document-storage";
 
 export const runtime = "nodejs";
 
-const MAX_EMBEDDING_CHUNKS = Number(process.env.EMBEDDING_MAX_CHUNKS_PER_DOC ?? 60);
-const EMBEDDING_CONCURRENCY = Number(process.env.EMBEDDING_CONCURRENCY ?? 2);
+const MAX_FILES_PER_UPLOAD = Number(process.env.ADMIN_UPLOAD_MAX_FILES ?? 10);
 const allowedExtSet = new Set([".pdf", ".doc", ".docx"]);
+const DOCUMENT_VERSION = "v1";
 
-type CreatedChunk = {
-  id: string;
-  chunkText: string;
+type UploadAcceptedResult = {
+  document: {
+    id: string;
+    title: string;
+    code: string;
+    category: string;
+    source: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  meta: {
+    fileName: string;
+    fileSize: number;
+  };
 };
 
 function sanitizeBaseName(filename: string) {
@@ -35,101 +54,106 @@ function getClientIp(request: Request) {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
-async function mapWithConcurrency<T, R>(
-  list: T[],
-  worker: (item: T, index: number) => Promise<R>,
-  concurrency: number
-): Promise<R[]> {
-  if (list.length === 0) {
-    return [];
+function normalizeUploadFiles(formData: FormData) {
+  const fromFiles = formData.getAll("files").filter((item): item is File => item instanceof File);
+  if (fromFiles.length > 0) {
+    return fromFiles;
   }
 
-  const size = Math.max(1, Math.min(concurrency, list.length));
-  const results: R[] = new Array(list.length) as R[];
-  let cursor = 0;
-
-  const run = async () => {
-    while (cursor < list.length) {
-      const current = cursor;
-      cursor += 1;
-      results[current] = await worker(list[current], current);
-    }
-  };
-
-  await Promise.all(Array.from({ length: size }, () => run()));
-  return results;
+  const single = formData.get("file");
+  if (single instanceof File) {
+    return [single];
+  }
+  return [];
 }
 
-export async function POST(request: Request) {
-  if (!isAdminAuthenticated()) {
-    return NextResponse.json({ message: "未登录或会话失效" }, { status: 401 });
+function buildTitle(titleInput: string, fileName: string, index: number, total: number) {
+  const fallback = sanitizeBaseName(fileName) || "上传文档";
+  if (!titleInput) {
+    return fallback;
   }
-
-  const formData = await request.formData().catch(() => null);
-  if (!formData) {
-    return NextResponse.json({ message: "请求格式错误" }, { status: 400 });
+  if (total === 1) {
+    return titleInput;
   }
+  return `${titleInput}-${index + 1}`.slice(0, 120);
+}
 
-  const fileValue = formData.get("file");
-  if (!(fileValue instanceof File)) {
-    return NextResponse.json({ message: "请上传文件" }, { status: 400 });
+function buildCode(codeInput: string, fileName: string, index: number, total: number) {
+  if (!codeInput) {
+    return `UP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
-
-  if (fileValue.size <= 0) {
-    return NextResponse.json({ message: "文件不能为空" }, { status: 400 });
+  if (total === 1) {
+    return codeInput;
   }
+  const suffix = sanitizeBaseName(fileName).slice(0, 20) || String(index + 1);
+  return `${codeInput}-${suffix}-${index + 1}`.slice(0, 80);
+}
 
-  const originalName = fileValue.name || "uploaded-file";
+async function saveIncomingFile(file: File, uploadDir: string) {
+  const originalName = file.name || "uploaded-file";
   const ext = path.extname(originalName).toLowerCase();
-  if (!allowedExtSet.has(ext)) {
-    return NextResponse.json({ message: "仅支持 PDF、DOC、DOCX 文件" }, { status: 400 });
-  }
-
-  const titleInput = String(formData.get("title") ?? "").trim();
-  const categoryInput = String(formData.get("category") ?? "").trim();
-  const codeInput = String(formData.get("code") ?? "").trim();
-
-  const title = titleInput || sanitizeBaseName(originalName) || "上传文档";
-  const category = categoryInput || "UPLOADED";
-  const code = codeInput || `UP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const version = "v1";
-
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "documents");
-  await fs.mkdir(uploadDir, { recursive: true });
-
   const safeBaseName = sanitizeBaseName(originalName) || "document";
   const fileName = `${Date.now()}-${randomUUID()}-${safeBaseName}${ext}`;
   const filePath = path.join(uploadDir, fileName);
-  const publicPath = `/uploads/documents/${fileName}`;
+  const publicPath = buildDocumentPublicPath(fileName);
+
+  const webStream = file.stream();
+  const nodeStream = Readable.fromWeb(webStream as NodeReadableStream<Uint8Array>);
+  await pipeline(nodeStream, createWriteStream(filePath));
+
+  return {
+    filePath,
+    publicPath,
+    originalName
+  };
+}
+
+async function acceptOneFile(input: {
+  file: File;
+  title: string;
+  code: string;
+  category: string;
+  uploadDir: string;
+}): Promise<UploadAcceptedResult> {
+  const { file, title, code, category, uploadDir } = input;
+  const saved = await saveIncomingFile(file, uploadDir);
 
   try {
-    const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await fs.writeFile(filePath, buffer);
-
-    const generatedChunks = await generateChunksFromDocument(filePath);
-
     const document = await prisma.document.upsert({
       where: {
         code_version: {
           code,
-          version
+          version: DOCUMENT_VERSION
         }
       },
       create: {
         title,
         code,
         category,
-        source: publicPath,
-        version,
+        source: saved.publicPath,
+        version: DOCUMENT_VERSION,
         publishDate: new Date(),
-        status: "ACTIVE"
+        status: "PROCESSING",
+        ingestStage: "EXTRACTING",
+        ingestError: null,
+        textCoverage: 0,
+        pageCount: 0,
+        parsedPageCount: 0,
+        ocrUsed: false,
+        lastIngestAt: new Date()
       },
       update: {
         title,
         category,
-        source: publicPath,
-        publishDate: new Date(),
-        status: "ACTIVE"
+        source: saved.publicPath,
+        status: "PROCESSING",
+        ingestStage: "EXTRACTING",
+        ingestError: null,
+        textCoverage: 0,
+        pageCount: 0,
+        parsedPageCount: 0,
+        ocrUsed: false,
+        lastIngestAt: new Date()
       },
       select: {
         id: true,
@@ -143,94 +167,119 @@ export async function POST(request: Request) {
       }
     });
 
-    await prisma.documentChunk.deleteMany({
-      where: {
-        documentId: document.id
-      }
+    await enqueueDocumentIngest({
+      documentId: document.id,
+      filePath: saved.filePath,
+      fileName: saved.originalName
     });
 
-    const createdChunks: CreatedChunk[] = [];
-    for (const chunk of generatedChunks) {
-      const created = await prisma.documentChunk.create({
-        data: {
-          documentId: document.id,
-          chapterTitle: chunk.chapterTitle,
-          sectionTitle: chunk.sectionTitle,
-          chunkText: chunk.chunkText,
-          pageNumber: chunk.pageNumber,
-          keywords: chunk.keywords,
-          sortOrder: chunk.sortOrder
-        },
-        select: {
-          id: true,
-          chunkText: true
-        }
-      });
-      createdChunks.push(created);
-    }
-
-    const chunksForEmbedding = createdChunks.slice(0, Math.max(0, MAX_EMBEDDING_CHUNKS));
-
-    const embeddingResults = await mapWithConcurrency(
-      chunksForEmbedding,
-      async (chunk) => {
-        const vectors = await embedTextWithBothModels(chunk.chunkText);
-        return {
-          chunkId: chunk.id,
-          vectors
-        };
-      },
-      EMBEDDING_CONCURRENCY
-    );
-
-    const embeddingRows = embeddingResults.flatMap((item) =>
-      item.vectors.map((vectorItem) => ({
-        chunkId: item.chunkId,
-        model: vectorItem.model,
-        vector: JSON.stringify(vectorItem.vector),
-        dimensions: vectorItem.vector.length
-      }))
-    );
-
-    if (embeddingRows.length > 0) {
-      await prisma.documentChunkEmbedding.createMany({
-        data: embeddingRows
-      });
-    }
-
-    const modelSet = Array.from(new Set(embeddingRows.map((item) => item.model)));
-
-    return NextResponse.json({
-      message: "上传并入库成功",
+    return {
       document: {
         ...document,
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString()
       },
-      ingest: {
-        chunkCount: createdChunks.length,
-        embeddedChunkCount: chunksForEmbedding.length,
-        embeddingRowCount: embeddingRows.length,
-        embeddingModels: modelSet
-      },
       meta: {
-        fileName: originalName,
-        fileSize: fileValue.size,
-        uploaderIp: getClientIp(request)
+        fileName: saved.originalName,
+        fileSize: file.size
       }
-    });
+    };
   } catch (error) {
-    await fs.rm(filePath, { force: true }).catch(() => undefined);
-
+    await fs.rm(saved.filePath, { force: true }).catch(() => undefined);
     if ((error as { code?: string }).code === "P2002") {
-      return NextResponse.json({ message: "编号重复，请修改后重试" }, { status: 409 });
+      throw new Error(`文件 ${saved.originalName} 编号重复，请修改 code 后重试`);
     }
+    throw error;
+  }
+}
 
+export async function POST(request: Request) {
+  if (!isAdminAuthenticated()) {
+    return NextResponse.json({ message: "未登录或会话失效" }, { status: 401 });
+  }
+
+  const formData = await request.formData().catch(() => null);
+  if (!formData) {
+    return NextResponse.json({ message: "请求格式错误" }, { status: 400 });
+  }
+
+  const files = normalizeUploadFiles(formData);
+  if (files.length === 0) {
+    return NextResponse.json({ message: "请上传文件" }, { status: 400 });
+  }
+  if (files.length > MAX_FILES_PER_UPLOAD) {
+    return NextResponse.json({ message: `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件` }, { status: 400 });
+  }
+
+  for (const file of files) {
+    if (file.size <= 0) {
+      return NextResponse.json({ message: `文件 ${file.name || "unknown"} 不能为空` }, { status: 400 });
+    }
+    const ext = path.extname(file.name || "").toLowerCase();
+    if (!allowedExtSet.has(ext)) {
+      return NextResponse.json({ message: `文件 ${file.name || "unknown"} 格式不支持，仅支持 PDF、DOC、DOCX` }, { status: 400 });
+    }
+  }
+
+  const titleInput = String(formData.get("title") ?? "").trim();
+  const categoryInput = String(formData.get("category") ?? "").trim();
+  const codeInput = String(formData.get("code") ?? "").trim();
+  const category = categoryInput || "UPLOADED";
+
+  const uploadDir = getUploadStorageDir();
+  await fs.mkdir(uploadDir, { recursive: true });
+
+  const success: UploadAcceptedResult[] = [];
+  const failed: Array<{ fileName: string; message: string }> = [];
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const title = buildTitle(titleInput, file.name, index, files.length);
+    const code = buildCode(codeInput, file.name, index, files.length);
+
+    try {
+      const result = await acceptOneFile({
+        file,
+        title,
+        code,
+        category,
+        uploadDir
+      });
+      success.push(result);
+    } catch (error) {
+      failed.push({
+        fileName: file.name || `file-${index + 1}`,
+        message: error instanceof Error ? error.message : "上传失败"
+      });
+    }
+  }
+
+  if (success.length === 0) {
     return NextResponse.json(
       {
-        message: error instanceof Error ? error.message : "上传失败，请稍后重试"
+        message: failed[0]?.message ?? "上传失败，请稍后重试",
+        errors: failed
       },
       { status: 500 }
     );
   }
+
+  return NextResponse.json(
+    {
+      message:
+        failed.length === 0
+          ? `上传已接收，共 ${success.length} 个文件，后台处理中`
+          : `部分接收成功：成功 ${success.length} 个，失败 ${failed.length} 个`,
+      document: success[0].document,
+      documents: success.map((item) => item.document),
+      meta: {
+        uploaderIp: getClientIp(request),
+        totalFiles: files.length,
+        successFiles: success.length,
+        failedFiles: failed.length
+      },
+      errors: failed
+    },
+    { status: 202 }
+  );
 }

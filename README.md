@@ -193,3 +193,16 @@ npm run dev
 ```
 
 访问：`http://localhost:3000`
+
+## 10. 文档入库全量重建（RAG 回补）
+
+```bash
+# 将 /uploads 文档全部重跑：提取 -> 切片 -> embedding -> 质量门禁
+npm run ingest:rebuild -- --wait
+```
+
+说明：
+
+1. 只处理后台上传文档（`/uploads/documents/*`）。
+2. 回补报告会输出状态分布与失败原因 TopN。
+3. 可选启用云 OCR 异步回退（见 `.env.example` 的 `CLOUD_OCR_*` 配置）。

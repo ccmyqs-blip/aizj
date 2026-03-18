@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 import { buildSnippet } from "@/lib/search-utils";
 import {
   HARD_CONSTRAINT_QA_SYSTEM_PROMPT,
@@ -9,7 +9,7 @@ import {
 
 const DASHSCOPE_BASE_URL = process.env.DASHSCOPE_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = process.env.DASHSCOPE_MODEL ?? "qwen-plus";
-const REQUEST_TIMEOUT_MS = Number(process.env.DASHSCOPE_TIMEOUT_MS ?? 12000);
+const REQUEST_TIMEOUT_MS = Number(process.env.DASHSCOPE_TIMEOUT_MS ?? 25000);
 
 export type LLMContextChunk = {
   chunkId: string;
@@ -122,6 +122,36 @@ function buildMessages(
   ];
 }
 
+function buildRescueMessages(
+  question: string,
+  contextChunks: LLMContextChunk[],
+  conversationTurns: ConversationTurn[] = []
+): DashscopeMessage[] {
+  const userPrompt =
+    HARD_CONSTRAINT_QA_USER_PROMPT_TEMPLATE.replace("{{question}}", question).replace(
+      "{{contextChunks}}",
+      buildEvidence(contextChunks)
+    ) + buildConversationHistoryBlock(conversationTurns);
+
+  return [
+    {
+      role: "system",
+      content: `你是工程造价依据摘要助手。
+只允许基于提供的依据片段作答，不得编造条文、编号、页码或结论。
+请优先提炼“可确认部分”，即便不能覆盖全部问题，也要给出已能确认的范围与条件。
+仅当所有片段都与问题无直接关联时，才输出“未找到足够依据”。
+输出格式必须为：
+一、结论
+二、依据
+三、风险提示`
+    },
+    {
+      role: "user",
+      content: userPrompt
+    }
+  ];
+}
+
 function mapTopCitations(contextChunks: LLMContextChunk[], limit = 3): LLMAnswerCitation[] {
   return contextChunks.slice(0, limit).map((chunk) => ({
     chunkId: chunk.chunkId,
@@ -147,12 +177,85 @@ function buildInsufficientAnswer() {
   ].join("\n");
 }
 
+function buildEvidenceOnlyAnswer(citations: LLMAnswerCitation[]) {
+  const lines = citations.slice(0, 3).map((item) => {
+    const chapter = [item.chapterTitle, item.sectionTitle].filter(Boolean).join(" / ") || "未标注章节";
+    const page = item.pageNumber ?? "未标注";
+    const excerpt = normalizeLine(item.excerpt).slice(0, 120);
+    return `- ${item.documentTitle}（${item.documentCode}）｜${chapter}｜页码：${page}｜要点：${excerpt}`;
+  });
+
+  return [
+    "一、结论",
+    "- 已检索到与问题相关的依据片段。基于当前可用片段，可先按“依据”中的规则点做保守判断。",
+    "",
+    "二、依据",
+    ...lines,
+    "",
+    "三、风险提示",
+    "- 以上为基于已检索片段的保守摘要，具体仍需结合合同、补充协议和项目资料复核。"
+  ].join("\n");
+}
+
 function fallbackResult(modelName = DEFAULT_MODEL, citations: LLMAnswerCitation[] = []): GenerateAnswerResult {
   return {
     answer: buildInsufficientAnswer(),
     citations,
     modelName
   };
+}
+
+async function rescueAnswerOrSummary(input: {
+  question: string;
+  contextChunks: LLMContextChunk[];
+  conversationTurns: ConversationTurn[];
+  apiKey: string;
+  modelName: string;
+}) {
+  const { question, contextChunks, conversationTurns, apiKey, modelName } = input;
+  const rescueMessages = buildRescueMessages(question, contextChunks, conversationTurns);
+  const rescueResponse = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: rescueMessages,
+      temperature: 0,
+      top_p: 0.1,
+      max_tokens: 900
+    })
+  }).catch(() => null);
+
+  if (rescueResponse?.ok) {
+    const rescuePayload = (await rescueResponse.json()) as {
+      model?: string;
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const rescueText = rescuePayload.choices?.[0]?.message?.content?.trim();
+    const rescueLooksInsufficient =
+      rescueText?.includes("暂不足以支持明确结论") || rescueText?.includes("未能直接回答该问题");
+    if (rescueText && !rescueLooksInsufficient) {
+      return {
+        answer: rescueText,
+        citations: mapTopCitations(contextChunks),
+        modelName: rescuePayload.model ?? modelName
+      } satisfies GenerateAnswerResult;
+    }
+  }
+
+  const topCitations = mapTopCitations(contextChunks);
+  if (topCitations.length > 0) {
+    return {
+      answer: buildEvidenceOnlyAnswer(topCitations),
+      citations: topCitations,
+      modelName
+    } satisfies GenerateAnswerResult;
+  }
+
+  return fallbackResult(modelName, topCitations);
 }
 
 function extractJsonObject(raw: string) {
@@ -189,6 +292,32 @@ function dedupeByChunkId(items: Array<{ chunkId: string; reason: string }>) {
   return list;
 }
 
+function resolveChunkId(rawChunkId: string, contextChunks: LLMContextChunk[]) {
+  const normalized = normalizeLine(rawChunkId);
+  if (!normalized) {
+    return null;
+  }
+
+  if (contextChunks.some((item) => item.chunkId === normalized)) {
+    return normalized;
+  }
+
+  const indexMatch = normalized.match(/(?:片段|chunk)\s*#?\s*(\d{1,2})/i) ?? normalized.match(/^#?(\d{1,2})$/);
+  if (indexMatch) {
+    const oneBased = Number(indexMatch[1]);
+    if (Number.isFinite(oneBased) && oneBased >= 1 && oneBased <= contextChunks.length) {
+      return contextChunks[oneBased - 1]?.chunkId ?? null;
+    }
+  }
+
+  const bySubstring = contextChunks.find((item) => normalized.includes(item.chunkId) || item.chunkId.includes(normalized));
+  if (bySubstring) {
+    return bySubstring.chunkId;
+  }
+
+  return null;
+}
+
 function buildAnswerWithStrictCitations(
   parsed: z.infer<typeof structuredOutputSchema>,
   contextChunks: LLMContextChunk[]
@@ -198,13 +327,14 @@ function buildAnswerWithStrictCitations(
   const validEvidence = dedupeByChunkId(
     parsed.evidence
       .map((item) => ({
-        chunkId: normalizeLine(item.chunkId),
+        chunkId: resolveChunkId(item.chunkId, contextChunks),
         reason: normalizeLine(item.reason)
       }))
+      .filter((item): item is { chunkId: string; reason: string } => Boolean(item.chunkId))
       .filter((item) => chunkMap.has(item.chunkId))
   ).slice(0, 6);
 
-  if (!parsed.canAnswer || validEvidence.length === 0) {
+  if (validEvidence.length === 0) {
     return null;
   }
 
@@ -234,12 +364,25 @@ function buildAnswerWithStrictCitations(
     return `- ${chunk.documentTitle}（${chunk.documentCode}）｜${chapter}｜页码：${page}｜说明：${reason}`;
   });
 
-  const conclusion = normalizeLine(parsed.conclusion) || INSUFFICIENT_EVIDENCE_TEXT;
+  const normalizedConclusion = normalizeLine(parsed.conclusion);
+  const hasUsableConclusion =
+    normalizedConclusion.length > 0 &&
+    !normalizedConclusion.includes("暂不足以支持明确结论") &&
+    !normalizedConclusion.includes("未能直接回答该问题");
+
+  if (!hasUsableConclusion) {
+    return null;
+  }
+
   const risk =
     normalizeLine(parsed.risk) ||
     "具体仍需结合合同、补充协议、招标文件、答疑纪要、签证单、联系单、往来函件及项目资料综合判断。";
 
-  const answer = ["一、结论", `- ${conclusion}`, "", "二、依据", ...evidenceLines, "", "三、风险提示", `- ${risk}`].join(
+  const finalRisk = parsed.canAnswer
+    ? risk
+    : `${risk} 当前结论为基于现有片段的保守解释，若合同或补充资料存在特别约定，应以其为准。`;
+
+  const answer = ["一、结论", `- ${normalizedConclusion}`, "", "二、依据", ...evidenceLines, "", "三、风险提示", `- ${finalRisk}`].join(
     "\n"
   );
 
@@ -259,18 +402,19 @@ export async function generateAnswer(
   const startTime = Date.now();
   const modelName = process.env.DASHSCOPE_MODEL ?? DEFAULT_MODEL;
   const apiKey = process.env.DASHSCOPE_API_KEY;
+  const conversationTurns = options?.conversationTurns ?? [];
 
   if (!apiKey) {
-    console.error("[llm] DASHSCOPE_API_KEY 未配置");
+    console.error("[llm] missing api key");
     return fallbackResult(modelName, mapTopCitations(contextChunks));
   }
 
   if (contextChunks.length === 0) {
-    console.warn("[llm] 无可用依据片段，直接拒答");
+    console.warn("[llm] no context chunks");
     return fallbackResult(modelName);
   }
 
-  const messages = buildMessages(question, contextChunks, options?.conversationTurns ?? []);
+  const messages = buildMessages(question, contextChunks, conversationTurns);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -293,7 +437,7 @@ export async function generateAnswer(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[llm] 百炼请求失败 status=${response.status}`, errorText);
+      console.error(`[llm] primary call failed status=${response.status}`, errorText);
       return fallbackResult(modelName, mapTopCitations(contextChunks));
     }
 
@@ -305,25 +449,46 @@ export async function generateAnswer(
     const effectiveModel = payload.model ?? modelName;
     const rawContent = payload.choices?.[0]?.message?.content?.trim();
     if (!rawContent) {
-      console.error("[llm] 模型响应为空");
-      return fallbackResult(effectiveModel, mapTopCitations(contextChunks));
+      return rescueAnswerOrSummary({
+        question,
+        contextChunks,
+        conversationTurns,
+        apiKey,
+        modelName: effectiveModel
+      });
     }
 
     const jsonObject = extractJsonObject(rawContent);
     if (!jsonObject) {
-      console.warn("[llm] 非 JSON 响应，触发硬约束拒答");
-      return fallbackResult(effectiveModel, mapTopCitations(contextChunks));
+      return rescueAnswerOrSummary({
+        question,
+        contextChunks,
+        conversationTurns,
+        apiKey,
+        modelName: effectiveModel
+      });
     }
 
     const parsed = structuredOutputSchema.safeParse(jsonObject);
     if (!parsed.success) {
-      console.warn("[llm] JSON 结构不合法，触发硬约束拒答");
-      return fallbackResult(effectiveModel, mapTopCitations(contextChunks));
+      return rescueAnswerOrSummary({
+        question,
+        contextChunks,
+        conversationTurns,
+        apiKey,
+        modelName: effectiveModel
+      });
     }
 
     const strictResult = buildAnswerWithStrictCitations(parsed.data, contextChunks);
     if (!strictResult) {
-      return fallbackResult(effectiveModel, mapTopCitations(contextChunks));
+      return rescueAnswerOrSummary({
+        question,
+        contextChunks,
+        conversationTurns,
+        apiKey,
+        modelName: effectiveModel
+      });
     }
 
     return {
@@ -333,9 +498,16 @@ export async function generateAnswer(
     };
   } catch (error) {
     if ((error as Error).name === "AbortError") {
-      console.error("[llm] 百炼请求超时");
+      console.error("[llm] primary call timeout, using rescue pipeline");
+      return rescueAnswerOrSummary({
+        question,
+        contextChunks,
+        conversationTurns,
+        apiKey,
+        modelName
+      });
     } else {
-      console.error("[llm] 百炼请求异常", error);
+      console.error("[llm] primary call exception", error);
     }
     return fallbackResult(modelName, mapTopCitations(contextChunks));
   } finally {

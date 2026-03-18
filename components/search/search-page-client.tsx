@@ -137,7 +137,7 @@ export function SearchPageClient() {
         ) : null}
 
         {!loading && !error
-          ? data.results.map((result) => <ResultCard key={result.chunkId} result={result} keywords={keywords} />)
+          ? data.results.map((result) => <ResultCard key={result.documentId} result={result} keywords={keywords} />)
           : null}
       </section>
     </div>

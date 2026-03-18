@@ -94,13 +94,15 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadCode, setUploadCode] = useState("");
   const [uploadCategory, setUploadCategory] = useState("UPLOADED");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadedSearch, setUploadedSearch] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadMessageType, setUploadMessageType] = useState<"" | "success" | "error">("");
   const [deletingDocumentId, setDeletingDocumentId] = useState<string>("");
   const [confirmDeleteDocument, setConfirmDeleteDocument] = useState<UploadedDocumentRow | null>(null);
   const [message, setMessage] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const toSummary = (text: string, max = 90) => {
     if (text.length <= max) {
@@ -200,9 +202,9 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
 
   const submitDocumentUpload = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!uploadFile) {
+    if (uploadFiles.length === 0) {
       setUploadMessageType("error");
-      setUploadMessage("请先选择 PDF 或 Word 文件");
+      setUploadMessage("请先选择至少一个 PDF 或 Word 文件");
       return;
     }
 
@@ -211,39 +213,94 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
     setUploadMessageType("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("title", uploadTitle.trim());
-      formData.append("code", uploadCode.trim());
-      formData.append("category", uploadCategory.trim() || "UPLOADED");
+      const createdRows: UploadedDocumentRow[] = [];
+      const failedMessages: string[] = [];
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 120000);
-      const response = await fetch("/api/admin/documents/upload", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal
-      }).finally(() => clearTimeout(timer));
+      for (const file of uploadFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("title", uploadTitle.trim());
+        formData.append("code", uploadCode.trim());
+        formData.append("category", uploadCategory.trim() || "UPLOADED");
 
-      const payload = (await response.json()) as { message?: string; document?: UploadedDocumentRow };
-      if (!response.ok || !payload.document) {
-        throw new Error(payload.message ?? "上传失败");
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        const timer = setTimeout(() => controller.abort(), 120000);
+
+        const response = await fetch("/api/admin/documents/upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal
+        }).finally(() => {
+          clearTimeout(timer);
+          uploadAbortRef.current = null;
+        });
+
+        const responseText = await response.text();
+        let payload: {
+          message?: string;
+          document?: UploadedDocumentRow;
+          documents?: UploadedDocumentRow[];
+        } = {};
+        try {
+          payload = responseText ? (JSON.parse(responseText) as typeof payload) : {};
+        } catch {
+          payload = {};
+        }
+
+        const currentCreated = payload.documents ?? (payload.document ? [payload.document] : []);
+        if (!response.ok || currentCreated.length === 0) {
+          if (response.status === 413) {
+            failedMessages.push(`${file.name}：上传体积过大（网关限制），请拆分或压缩后重试。`);
+            continue;
+          }
+          if (payload.message) {
+            failedMessages.push(`${file.name}：${payload.message}`);
+            continue;
+          }
+          if (responseText.trim().startsWith("<")) {
+            failedMessages.push(`${file.name}：网关返回 HTML 错误页，通常是登录失效或网关限制。`);
+            continue;
+          }
+          failedMessages.push(`${file.name}：上传失败`);
+          continue;
+        }
+
+        createdRows.push(...currentCreated);
       }
 
-      setUploadedRows((prev) => [payload.document!, ...prev].slice(0, 20));
+      if (createdRows.length > 0) {
+        setUploadedRows((prev) => [...createdRows, ...prev].slice(0, 20));
+      }
+
+      if (failedMessages.length > 0 && createdRows.length === 0) {
+        throw new Error(failedMessages.slice(0, 3).join("；"));
+      }
+
+      if (failedMessages.length > 0) {
+        setUploadMessageType("error");
+        setUploadMessage(`部分成功：成功 ${createdRows.length} 个，失败 ${failedMessages.length} 个。${failedMessages[0]}`);
+        return;
+      }
+
       setUploadTitle("");
       setUploadCode("");
       setUploadCategory("UPLOADED");
-      setUploadFile(null);
+      setUploadFiles([]);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
       setUploadMessageType("success");
-      setUploadMessage("文档上传成功");
+      setUploadMessage(`上传成功，共 ${createdRows.length} 个文件入库`);
     } catch (error) {
       setUploadMessageType("error");
-      setUploadMessage(error instanceof Error ? error.message : "上传失败");
+      if (error instanceof Error && error.name === "AbortError") {
+        setUploadMessage("上传已停止，已保留已完成文件。");
+      } else {
+        setUploadMessage(error instanceof Error ? error.message : "上传失败");
+      }
     } finally {
+      uploadAbortRef.current = null;
       setUploading(false);
     }
   };
@@ -277,6 +334,19 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
   const openFilePicker = () => {
     fileInputRef.current?.click();
   };
+
+  const stopUploading = () => {
+    uploadAbortRef.current?.abort();
+  };
+
+  const uploadedSearchKeyword = uploadedSearch.trim().toLowerCase();
+  const filteredUploadedRows = uploadedSearchKeyword
+    ? uploadedRows.filter((item) => {
+        const title = item.title.toLowerCase();
+        const code = item.code.toLowerCase();
+        return title.includes(uploadedSearchKeyword) || code.includes(uploadedSearchKeyword);
+      })
+    : uploadedRows;
 
   return (
     <div className="space-y-6">
@@ -312,8 +382,9 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => setUploadFiles(event.target.files ? Array.from(event.target.files) : [])}
               className="hidden"
             />
             <button
@@ -325,10 +396,20 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
               选择文件
             </button>
             <p className="max-w-[520px] truncate text-xs text-slate-600">
-              {uploadFile ? `已选择：${uploadFile.name}` : "未选择文件（支持 PDF / DOC / DOCX）"}
+              {uploadFiles.length > 0
+                ? `已选择 ${uploadFiles.length} 个文件：${uploadFiles[0].name}${uploadFiles.length > 1 ? " 等" : ""}`
+                : "未选择文件（支持 PDF / DOC / DOCX，可多选）"}
             </p>
             <button type="submit" disabled={uploading} className="btn-primary">
               {uploading ? "上传中..." : "上传文档"}
+            </button>
+            <button
+              type="button"
+              onClick={stopUploading}
+              disabled={!uploading}
+              className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              停止上传
             </button>
           </div>
         </form>
@@ -337,40 +418,54 @@ export function AdminDashboard({ leads, qaRecords, feedbacks, uploadedDocuments,
           <p className={`mt-3 text-sm ${uploadMessageType === "error" ? "text-rose-700" : "text-brand-700"}`}>{uploadMessage}</p>
         ) : null}
 
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            value={uploadedSearch}
+            onChange={(event) => setUploadedSearch(event.target.value)}
+            placeholder="搜索文档名称或编号（模糊匹配）"
+            className="field-input h-9 max-w-md px-3 text-xs"
+          />
+          <p className="text-xs text-slate-500">显示 {filteredUploadedRows.length} 条</p>
+        </div>
+
         <div className="mt-4 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
           {uploadedRows.length > 0 ? (
-            <ul className="divide-y divide-slate-100">
-              {uploadedRows.map((item) => (
-                <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-xs">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-slate-800">{item.title}</p>
-                    <p className="mt-1 text-slate-500">
-                      {item.code} · {item.category} · {new Date(item.createdAt).toLocaleString("zh-CN")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {item.source ? (
-                      <a
-                        href={item.source}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 transition hover:border-brand-600 hover:text-brand-700"
+            filteredUploadedRows.length > 0 ? (
+              <ul className="divide-y divide-slate-100">
+                {filteredUploadedRows.map((item) => (
+                  <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-800">{item.title}</p>
+                      <p className="mt-1 text-slate-500">
+                        {item.code} · {item.category} · {new Date(item.createdAt).toLocaleString("zh-CN")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {item.source ? (
+                        <a
+                          href={item.source}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 transition hover:border-brand-600 hover:text-brand-700"
+                        >
+                          查看文件
+                        </a>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteDocument(item)}
+                        disabled={deletingDocumentId === item.id || uploading}
+                        className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        查看文件
-                      </a>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteDocument(item)}
-                      disabled={deletingDocumentId === item.id || uploading}
-                      className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {deletingDocumentId === item.id ? "删除中..." : "删除"}
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                        {deletingDocumentId === item.id ? "删除中..." : "删除"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-3 py-6 text-center text-sm text-slate-500">未找到匹配文档</p>
+            )
           ) : (
             <p className="px-3 py-6 text-center text-sm text-slate-500">暂无上传文档</p>
           )}
